@@ -4,19 +4,17 @@ import {
   createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { 
-  getDatabase, ref, set, get, onValue, onDisconnect, remove, push, update, runTransaction 
+  getDatabase, ref, set, get, onValue, onDisconnect, remove, update, runTransaction, serverTimestamp 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-// ⚠️ 請替換為你自己的 Firebase Config 專案設定資訊！
 const firebaseConfig = {
-    apiKey: "AIzaSyCMDqo_WjGtGevTHcu4VFgcngyge66hJ60",
-    authDomain: "go-rpg-game.firebaseapp.com",
-    databaseURL: "https://go-rpg-game-default-rtdb.firebaseio.com",
-    projectId: "go-rpg-game",
-    storageBucket: "go-rpg-game.firebasestorage.app",
-    messagingSenderId: "903016119451",
-    appId: "1:903016119451:web:6e90207567f5ca27e99a3e",
-    measurementId: "G-RDK6HNMW9Z"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -27,25 +25,24 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 let currentUid = null;
-let selectedItemToSell = null;
-let players = {};
 let monster = null;
-const MOVE_SPEED = 4;
+let monsterRef = null;
+const MOVE_SPEED = 2; // 緩慢推進速度
 
 let myData = {
-  id: "",
-  name: "玩家",
-  x: 400,
-  y: 300,
-  targetX: 400,
-  targetY: 300,
-  color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
-  score: 0,
-  gold: 100,
-  inventory: [
-    { id: "item_sword_01", name: "🗡️ 鐵劍", type: "weapon" },
-    { id: "item_potion_01", name: "🧪 藥水", type: "consumable" }
-  ]
+  name: "冒險者",
+  level: 1,
+  exp: 0,
+  maxExp: 100,
+  hp: 100,
+  maxHp: 100,
+  atk: 10,
+  gold: 0,
+  stage: 1,
+  x: 50,
+  y: 200,
+  weaponName: "木棍",
+  weaponAtk: 0
 };
 
 function resizeCanvas() {
@@ -55,31 +52,23 @@ function resizeCanvas() {
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
-// 面板控制綁定
-document.getElementById("tab-inventory-btn").addEventListener("click", () => {
-  document.getElementById("inventory-panel").classList.toggle("hidden");
-  document.getElementById("market-panel").classList.add("hidden");
+// 面板按鈕綁定
+document.getElementById("upgrade-btn").addEventListener("click", async () => {
+  const upgradeCost = myData.level * 50;
+  if (myData.gold >= upgradeCost) {
+    myData.gold -= upgradeCost;
+    myData.atk += 10;
+    myData.weaponAtk += 10;
+    document.getElementById("weapon-slot").innerText = `武器: +${myData.weaponAtk} 攻擊`;
+    await saveData();
+    addLog(`⚔️ 強化攻擊力！消耗 ${upgradeCost} 金幣。`);
+    updateUI();
+  } else {
+    addLog("不足，無法強化！");
+  }
 });
 
-document.getElementById("tab-market-btn").addEventListener("click", () => {
-  document.getElementById("market-panel").classList.toggle("hidden");
-  document.getElementById("inventory-panel").classList.add("hidden");
-});
-
-document.getElementById("close-inventory-btn").addEventListener("click", () => {
-  document.getElementById("inventory-panel").classList.add("hidden");
-});
-
-document.getElementById("close-market-btn").addEventListener("click", () => {
-  document.getElementById("market-panel").classList.add("hidden");
-});
-
-// Google 轉址登入結果檢查
-getRedirectResult(auth).catch(err => {
-  document.getElementById("auth-error").innerText = "Google 登入失敗: " + err.message;
-});
-
-// Auth 身份監聽
+// Auth 身份監聽與自動創角/讀檔
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUid = user.uid;
@@ -93,246 +82,225 @@ onAuthStateChanged(auth, async (user) => {
     }
 
     document.getElementById("login-modal").style.display = "none";
-    initOnlineGame();
-    renderInventory();
-    listenToMarket();
+    initIdleGame();
+    updateUI();
   }
 });
 
-// 1. Google 轉址登入 (防手機封鎖 Popup)
+// Google 與 Email 登入邏輯
+getRedirectResult(auth).catch(err => { document.getElementById("auth-error").innerText = err.message; });
 const provider = new GoogleAuthProvider();
-document.getElementById("google-btn").addEventListener("click", () => {
-  signInWithRedirect(auth, provider);
-});
+document.getElementById("google-btn").addEventListener("click", () => signInWithRedirect(auth, provider));
 
-// 2. Email 登入/自動註冊
 document.getElementById("auth-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = document.getElementById("email-input").value;
   const password = document.getElementById("password-input").value;
-  const errorEl = document.getElementById("auth-error");
-  errorEl.innerText = "";
-
-  if (password.length < 6) {
-    errorEl.innerText = "密碼長度至少需要 6 位數！";
-    return;
-  }
-
   try {
     await signInWithEmailAndPassword(auth, email, password);
   } catch (err) {
-    // 帳號不存在則自動進行註冊
     if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") {
-      try {
-        await createUserWithEmailAndPassword(auth, email, password);
-      } catch (createErr) {
-        errorEl.innerText = "註冊失敗: " + createErr.message;
-      }
+      try { await createUserWithEmailAndPassword(auth, email, password); } 
+      catch (createErr) { document.getElementById("auth-error").innerText = createErr.message; }
     } else {
-      errorEl.innerText = "登入失敗: " + err.message;
+      document.getElementById("auth-error").innerText = err.message;
     }
   }
 });
 
-// 登出
 document.getElementById("logout-btn").addEventListener("click", async () => {
   if (currentUid) await remove(ref(db, `players/${currentUid}`));
   await signOut(auth);
   window.location.reload();
 });
 
-function initOnlineGame() {
-  myData.id = currentUid;
-  myData.x = Math.random() * (canvas.width - 100) + 50;
-  myData.y = Math.random() * (canvas.height - 100) + 50;
-  myData.targetX = myData.x;
-  myData.targetY = myData.y;
+// 初始化放置遊戲
+function initIdleGame() {
+  monsterRef = ref(db, "monster");
+  
+  // 監聽怪物狀態（單一怪物被全服共享，或每個關卡獨立生成）
+  onValue(monsterRef, (snapshot) => {
+    monster = snapshot.val();
+  });
 
-  const myPlayerRef = ref(db, `players/${currentUid}`);
-  onDisconnect(myPlayerRef).remove();
-  set(myPlayerRef, myData);
-
-  onValue(ref(db, "players"), snapshot => { players = snapshot.val() || {}; });
-  onValue(ref(db, "monster"), snapshot => { monster = snapshot.val(); });
-
-  setupControls();
+  setupMonsterSpawner();
   requestAnimationFrame(gameLoop);
 }
 
-function renderInventory() {
-  const container = document.getElementById("inventory-list");
-  document.getElementById("player-gold-display").innerText = `💰 當前金幣: ${myData.gold}`;
-  document.getElementById("user-info").innerText = `玩家: ${myData.name} | 💰 ${myData.gold}`;
-  container.innerHTML = "";
-
-  if (!myData.inventory || myData.inventory.length === 0) {
-    container.innerHTML = "<p style='grid-column: span 2; font-size: 11px; color: #888;'>背包是空的</p>";
-    return;
+// 關卡怪物生成邏輯
+function setupMonsterSpawner() {
+  if (currentUid) {
+    // 檢查怪物是否死亡或不存在，由系統/第一個玩家生成
+    get(monsterRef).then(snapshot => {
+      if (!snapshot.exists()) {
+        spawnNewMonster();
+      }
+    });
   }
+}
 
-  myData.inventory.forEach((item, index) => {
-    const card = document.createElement("div");
-    card.className = "item-card";
-    card.innerText = item.name;
-    card.onclick = () => {
-      selectedItemToSell = { ...item, originalIndex: index };
-      document.getElementById("sell-item-name").innerText = item.name;
-      document.getElementById("sell-box").classList.remove("hidden");
-    };
-    container.appendChild(card);
+function spawnNewMonster() {
+  const hp = 50 + (myData.stage * 20);
+  const maxHp = hp;
+  set(monsterRef, {
+    hp: hp,
+    maxHp: maxHp,
+    name: "哥布林",
+    x: window.innerWidth - 100,
+    y: 200,
+    alive: true
   });
 }
 
-// 物品上架
-document.getElementById("confirm-sell-btn").addEventListener("click", async () => {
-  const price = parseInt(document.getElementById("sell-price-input").value);
-  if (!selectedItemToSell || isNaN(price) || price <= 0) return alert("請輸入售價！");
+// 保存進度至 Firebase
+async function saveData() {
+  await update(ref(db, `users/${currentUid}`), myData);
+}
 
-  myData.inventory.splice(selectedItemToSell.originalIndex, 1);
-  await update(ref(db, `users/${currentUid}`), { inventory: myData.inventory });
+// 懸浮字體特效
+function showDamageText(x, y, damage) {
+  const span = document.createElement("div");
+  span.className = "damage-text";
+  span.innerText = damage;
+  span.style.left = `${x}px`;
+  span.style.top = `${y - 20}px`;
+  document.body.appendChild(span);
+  setTimeout(() => span.remove(), 500);
+}
 
-  await push(ref(db, "market"), {
-    sellerUid: currentUid,
-    sellerName: myData.name,
-    item: selectedItemToSell,
-    price: price
-  });
+// UI 更新
+function updateUI() {
+  document.getElementById("player-info").innerText = `${myData.name} [Lv.${myData.level}]`;
+  document.getElementById("player-stats").innerText = `⚔️ 攻擊力: ${myData.atk} | 🩸 生命值: ${myData.hp}`;
+  document.getElementById("player-gold").innerText = `💰 金幣: ${myData.gold}`;
+  document.getElementById("current-stage").innerText = `🗺️ 關卡: 第 ${myData.stage} 層`;
+  document.getElementById("weapon-slot").innerText = `武器: +${myData.weaponAtk} 攻擊`;
 
-  selectedItemToSell = null;
-  document.getElementById("sell-box").classList.add("hidden");
-  renderInventory();
-});
+  const expPct = Math.min(100, (myData.exp / myData.maxExp) * 100);
+  document.getElementById("exp-fill").style.width = `${expPct}%`;
+}
 
-// 監聽拍賣場
-function listenToMarket() {
-  onValue(ref(db, "market"), (snapshot) => {
-    const list = document.getElementById("market-list");
-    list.innerHTML = "";
-    const items = snapshot.val();
+function addLog(text) {
+  const logBox = document.getElementById("log-messages");
+  const div = document.createElement("div");
+  div.innerText = text;
+  logBox.appendChild(div);
+  logBox.scrollTop = logBox.scrollHeight;
+}
 
-    if (!items) {
-      list.innerHTML = "<p style='font-size: 11px; color: #888; text-align: center;'>拍賣行空無一物</p>";
-      return;
+// 戰鬥與掛機計算
+let lastAttackTime = 0;
+const ATTACK_INTERVAL = 1000; // 每秒自動攻擊一次
+
+function updateGameLogic() {
+  if (!monster || !monster.alive) return;
+
+  // 自動攻擊邏輯（角色碰到怪物範圍內即刻施放）
+  const dist = Math.hypot((window.innerWidth - 100) - myData.x, monster.y - myData.y);
+  if (dist < 150) {
+    const now = Date.now();
+    if (now - lastAttackTime > ATTACK_INTERVAL) {
+      monster.hp -= myData.atk;
+      showDamageText(window.innerWidth - 100, 200, myData.atk);
+
+      if (monster.hp <= 0) {
+        monster.alive = false;
+        handleMonsterKilled();
+      } else {
+        // 同步扣血
+        set(ref(db, "monster/hp"), monster.hp);
+      }
+      lastAttackTime = now;
     }
-
-    Object.entries(items).forEach(([id, data]) => {
-      const row = document.createElement("div");
-      row.className = "market-item";
-      const isMine = data.sellerUid === currentUid;
-
-      row.innerHTML = `
-        <div style="font-size:11px;">
-          <strong>${data.item.name}</strong><br>
-          <span style="color:#888;">💰 ${data.price} (${data.sellerName})</span>
-        </div>
-      `;
-
-      const btn = document.createElement("button");
-      btn.className = "action-btn-sm blue";
-      btn.style.width = "50px";
-      btn.innerText = isMine ? "下架" : "購買";
-      btn.onclick = () => isMine ? cancelListing(id, data) : buyItem(id, data);
-
-      row.appendChild(btn);
-      list.appendChild(row);
-    });
-  });
-}
-
-async function buyItem(id, data) {
-  if (myData.gold < data.price) return alert("金幣不足！");
-  const listingRef = ref(db, `market/${id}`);
-  const snap = await get(listingRef);
-  if (!snap.exists()) return alert("商品已被買走！");
-
-  myData.gold -= data.price;
-  if (!myData.inventory) myData.inventory = [];
-  myData.inventory.push(data.item);
-
-  await update(ref(db, `users/${currentUid}`), { gold: myData.gold, inventory: myData.inventory });
-  await runTransaction(ref(db, `users/${data.sellerUid}/gold`), gold => (gold || 0) + data.price);
-  await remove(listingRef);
-
-  renderInventory();
-}
-
-async function cancelListing(id, data) {
-  await remove(ref(db, `market/${id}`));
-  if (!myData.inventory) myData.inventory = [];
-  myData.inventory.push(data.item);
-  await update(ref(db, `users/${currentUid}`), { inventory: myData.inventory });
-  renderInventory();
-}
-
-function setupControls() {
-  canvas.addEventListener("pointerdown", (e) => {
-    if (e.target.closest("#chat-container") || e.target.closest("#touch-ui") || e.target.closest(".game-panel") || e.target.closest("#side-menu-tabs")) return;
-    myData.targetX = e.clientX;
-    myData.targetY = e.clientY;
-    syncPosition();
-  });
-
-  document.getElementById("attack-btn").addEventListener("click", performAttack);
-}
-
-function performAttack() {
-  if (!monster) return;
-  if (Math.hypot(myData.x - monster.x, myData.y - monster.y) < 60) {
-    myData.gold += 10;
-    renderInventory();
-    update(ref(db, `users/${currentUid}`), { gold: myData.gold });
-    set(ref(db, "monster"), {
-      x: Math.random() * (canvas.width - 100) + 50,
-      y: Math.random() * (canvas.height - 100) + 50
-    });
+  } else {
+    // 角色緩慢向前移動靠攏怪物
+    myData.x += MOVE_SPEED;
   }
 }
 
-function updateMovement() {
-  const dx = myData.targetX - myData.x;
-  const dy = myData.targetY - myData.y;
-  const dist = Math.hypot(dx, dy);
+// 擊殺結算
+async function handleMonsterKilled() {
+  addLog(`💀 擊殺 ${monster.name}！獲得獎勵。`);
+  
+  // 獲得金幣與經驗
+  myData.gold += 15 * myData.stage;
+  myData.exp += 30;
 
-  if (dist > MOVE_SPEED) {
-    myData.x += (dx / dist) * MOVE_SPEED;
-    myData.y += (dy / dist) * MOVE_SPEED;
-    syncPosition();
+  // 升級檢測
+  if (myData.exp >= myData.maxExp) {
+    myData.level += 1;
+    myData.exp -= myData.maxExp;
+    myData.maxExp = Math.floor(myData.maxExp * 1.2);
+    myData.maxHp += 20;
+    myData.hp = myData.maxHp;
+    myData.atk += 10;
+    addLog(`🎉 升級！等級提升至 Lv.${myData.level}！`);
   }
+
+  // 自動推進關卡
+  if (myData.level % 5 === 0 && myData.level !== 1) {
+    myData.stage += 1;
+    addLog(`⏩ 突破關卡！進入第 ${myData.stage} 層！`);
+  }
+
+  updateUI();
+  await saveData();
+
+  // 延遲重生下一隻怪
+  setTimeout(() => {
+    spawnNewMonster();
+  }, 2000);
 }
 
-let lastSync = 0;
-function syncPosition() {
-  const now = Date.now();
-  if (now - lastSync > 50) {
-    set(ref(db, `players/${currentUid}`), myData);
-    lastSync = now;
-  }
-}
-
+// 畫面渲染
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  if (monster) {
+  // 繪製背景元素（簡單的地面線）
+  ctx.strokeStyle = "#444";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, 250);
+  ctx.lineTo(window.innerWidth, 250);
+  ctx.stroke();
+
+  // 繪製角色 (勇者)
+  ctx.beginPath();
+  ctx.arc(myData.x, 220, 25, 0, Math.PI * 2);
+  ctx.fillStyle = "#3498db";
+  ctx.fill();
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.fillStyle = "white";
+  ctx.font = "12px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText(myData.name, myData.x, 180);
+
+  // 繪製怪物
+  if (monster && monster.alive) {
     ctx.beginPath();
-    ctx.arc(monster.x, monster.y, 20, 0, Math.PI * 2);
+    ctx.arc(window.innerWidth - 100, 220, 30, 0, Math.PI * 2);
     ctx.fillStyle = "#e74c3c";
     ctx.fill();
-  }
+    ctx.strokeStyle = "#fff";
+    ctx.stroke();
 
-  Object.values(players).forEach(p => {
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, 15, 0, Math.PI * 2);
-    ctx.fillStyle = p.color || "#3498db";
-    ctx.fill();
+    // 怪物血條
+    const hpPct = Math.max(0, monster.hp / monster.maxHp);
+    ctx.fillStyle = "#c0392b";
+    ctx.fillRect(window.innerWidth - 140, 270, 80, 8);
+    ctx.fillStyle = "#2ecc71";
+    ctx.fillRect(window.innerWidth - 140, 270, 80 * hpPct, 8);
+
     ctx.fillStyle = "white";
-    ctx.font = "12px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText(`${p.name}`, p.x, p.y - 20);
-  });
+    ctx.fillText(`${monster.name} (HP: ${monster.hp})`, window.innerWidth - 100, 180);
+  }
 }
 
 function gameLoop() {
-  updateMovement();
+  updateGameLogic();
   render();
   requestAnimationFrame(gameLoop);
 }
