@@ -4,19 +4,18 @@ import {
   createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { 
-  getDatabase, ref, set, get, update 
+  getDatabase, ref, set, get, update, query, orderByChild, limitToLast 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-// ⚠️ 請填入你自己的 Firebase 金鑰 ⚠️
+// ⚠️ 請替換為你自己的 Firebase 金鑰 ⚠️
 const firebaseConfig = {
-    apiKey: "AIzaSyCMDqo_WjGtGevTHcu4VFgcngyge66hJ60",
-    authDomain: "go-rpg-game.firebaseapp.com",
-    databaseURL: "https://go-rpg-game-default-rtdb.firebaseio.com",
-    projectId: "go-rpg-game",
-    storageBucket: "go-rpg-game.firebasestorage.app",
-    messagingSenderId: "903016119451",
-    appId: "1:903016119451:web:6e90207567f5ca27e99a3e",
-    measurementId: "G-RDK6HNMW9Z"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -28,9 +27,11 @@ const ctx = canvas.getContext("2d");
 
 let currentUid = null;
 let currentAction = "combat";
+let currentMap = "goblin";
 let actionTimer = 0;
 const ACTION_MAX_TIME = 2000;
 
+// 玩家數據模型
 let player = {
   name: "冒險者",
   level: 1,
@@ -41,9 +42,18 @@ let player = {
   wood: 0,
   cheese: 0,
   atk: 10,
-  weaponAtk: 0,
-  weaponName: "無",
+  def: 0,
+  equippedWeapon: null, // { name, atk }
+  equippedArmor: null,  // { name, def }
+  inventory: [],        // 背包道具 [{ id, name, type, val }]
   lastOnline: Date.now()
+};
+
+// 地圖怪物設定
+const MAP_DATA = {
+  goblin: { name: " Goblin 營地", monster: "👺 野生哥布林", icon: "👺", exp: 20, gold: 10, dropChance: 0.1 },
+  forest: { name: "迷霧森林", monster: "🐺 森林野狼", icon: "🐺", exp: 45, gold: 25, dropChance: 0.2 },
+  boss: { name: "魔王城堡", monster: "🐲 暗黑遠古龍", icon: "🐲", exp: 120, gold: 80, dropChance: 0.4 }
 };
 
 function resizeCanvas() {
@@ -55,23 +65,21 @@ function resizeCanvas() {
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
-// --- 顯示/隱藏錯誤與提示訊息 ---
 function showError(msg) {
   const errEl = document.getElementById("auth-error");
   if (errEl) errEl.innerText = msg;
 }
 
-// --- 自動登入機制 (只要登入過一次，之後開網頁自動免登入) ---
+// 帳號認證狀態變化
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUid = user.uid;
-    console.log("已自動登入 UID:", currentUid);
-    
     try {
-      // 載入玩家進度
       const snap = await get(ref(db, `milky_users/${currentUid}`));
       if (snap.exists()) {
-        Object.assign(player, snap.val());
+        const data = snap.val();
+        Object.assign(player, data);
+        if (!player.inventory) player.inventory = [];
         calculateOfflineProgress(player.lastOnline);
       } else {
         const inputName = document.getElementById("nickname-input")?.value.trim();
@@ -79,104 +87,41 @@ onAuthStateChanged(auth, async (user) => {
         await set(ref(db, `milky_users/${currentUid}`), player);
       }
 
-      // 隱藏登入 Modal，直接進入遊戲
-      const modal = document.getElementById("login-modal");
-      if (modal) modal.style.display = "none";
-      
+      document.getElementById("login-modal").style.display = "none";
       updateUI();
+      loadLeaderboard();
       requestAnimationFrame(gameLoop);
     } catch (err) {
       showError("資料載入失敗：" + err.message);
     }
   } else {
-    // 未登入時顯示彈窗
-    const modal = document.getElementById("login-modal");
-    if (modal) modal.style.display = "flex";
+    document.getElementById("login-modal").style.display = "flex";
   }
 });
 
-// --- 表單提交登入/註冊 (修復無反應問題) ---
-const authForm = document.getElementById("auth-form");
-if (authForm) {
-  authForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    showError("");
-    
-    const email = document.getElementById("email-input").value.trim();
-    const password = document.getElementById("password-input").value.trim();
-    const submitBtn = document.getElementById("submit-btn");
+// 表單提交處理
+document.getElementById("auth-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  showError("");
+  const email = document.getElementById("email-input").value.trim();
+  const password = document.getElementById("password-input").value.trim();
 
-    if (!email || !password) {
-      showError("請輸入 Email 與密碼！");
-      return;
-    }
-
-    if (password.length < 6) {
-      showError("密碼長度至少需要 6 位數！");
-      return;
-    }
-
-    if (submitBtn) {
-      submitBtn.disabled = true;
-      submitBtn.innerText = "驗證中...";
-    }
-
-    try {
-      // 1. 嘗試直接登入
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (err) {
-      // 2. 若帳號不存在，自動嘗試為新使用者註冊
-      if (
-        err.code === "auth/user-not-found" || 
-        err.code === "auth/invalid-credential"
-      ) {
-        try {
-          await createUserWithEmailAndPassword(auth, email, password);
-        } catch (createErr) {
-          showError(getFriendlyErrorMessage(createErr));
-        }
-      } else {
-        showError(getFriendlyErrorMessage(err));
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch (err) {
+    if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") {
+      try {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } catch (cErr) {
+        showError("註冊失敗：" + cErr.message);
       }
-    } finally {
-      if (submitBtn) {
-        submitBtn.disabled = false;
-        submitBtn.innerText = "開始冒險（登入 / 註冊）";
-      }
+    } else {
+      showError("登入失敗：" + err.message);
     }
-  });
-}
+  }
+});
 
-// 錯誤訊息轉化為中文
-function getFriendlyErrorMessage(err) {
-  if (err.code === "auth/invalid-email") return "Email 格式不正確！";
-  if (err.code === "auth/wrong-password") return "密碼錯誤，請重新輸入！";
-  if (err.code === "auth/email-already-in-use") return "此 Email 已被註冊，但密碼不正確！";
-  if (err.code === "auth/weak-password") return "密碼強度不足，請設定至少 6 位數。";
-  return "登入失敗：" + err.message;
-}
-
-// --- Google 轉址登入 ---
-getRedirectResult(auth).catch(err => showError(err.message));
-const provider = new GoogleAuthProvider();
-const googleBtn = document.getElementById("google-btn");
-if (googleBtn) {
-  googleBtn.addEventListener("click", () => {
-    signInWithRedirect(auth, provider);
-  });
-}
-
-// --- 登出 ---
-const logoutBtn = document.getElementById("logout-btn");
-if (logoutBtn) {
-  logoutBtn.addEventListener("click", async () => {
-    await saveData();
-    await signOut(auth);
-    window.location.reload();
-  });
-}
-
-// --- 遊戲頁籤與工作切換 ---
+// 頁籤導覽
 document.querySelectorAll(".nav-btn").forEach(btn => {
   btn.addEventListener("click", (e) => {
     document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
@@ -188,6 +133,7 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
   });
 });
 
+// 工作切換
 document.querySelectorAll(".action-card").forEach(card => {
   card.addEventListener("click", () => {
     document.querySelectorAll(".action-card").forEach(c => c.classList.remove("active-work"));
@@ -198,29 +144,43 @@ document.querySelectorAll(".action-card").forEach(card => {
   });
 });
 
+// 地圖切換
+document.querySelectorAll(".map-card").forEach(card => {
+  card.addEventListener("click", () => {
+    document.querySelectorAll(".map-card").forEach(c => c.classList.remove("active-map"));
+    card.classList.add("active-map");
+    currentMap = card.getAttribute("data-map");
+    addLog(`🗺️ 切換地圖至：${MAP_DATA[currentMap].name}`);
+  });
+});
+
 function getActionName(act) {
-  if (act === "combat") return "⚔️ 自動打怪";
+  if (act === "combat") return `⚔️ 野外打怪 (${MAP_DATA[currentMap].name})`;
   if (act === "milking") return "🥛 牧場擠奶";
   if (act === "woodcutting") return "🌲 森林伐木";
   return "空閒";
 }
 
-// --- 鍛造與交易 ---
+// 鍛造與交易
 document.querySelectorAll(".craft-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     const type = btn.getAttribute("data-craft");
     if (type === "cheese" && player.milk >= 5) {
       player.milk -= 5;
       player.cheese += 1;
-      addLog("🧀 成功製作濃縮牛奶起司！");
+      addLog("🧀 製作濃縮牛奶起司成功！");
     } else if (type === "sword" && player.wood >= 10 && player.gold >= 50) {
       player.wood -= 10;
       player.gold -= 50;
-      player.weaponAtk = 15;
-      player.weaponName = "精鋼長劍";
-      addLog("🗡️ 成功鍛造精鋼長劍！攻擊力 +15");
+      player.inventory.push({ id: Date.now(), name: "精鋼長劍", type: "weapon", val: 15 });
+      addLog("🗡️ 鍛造精鋼長劍成功，已放入背包！");
+    } else if (type === "armor" && player.wood >= 15 && player.gold >= 80) {
+      player.wood -= 15;
+      player.gold -= 80;
+      player.inventory.push({ id: Date.now(), name: "硬木重甲", type: "armor", val: 10 });
+      addLog("🛡️ 鍛造硬木重甲成功，已放入背包！");
     } else {
-      addLog("❌ 資源不足，無法合成！");
+      addLog("❌ 資源不足！");
     }
     updateUI();
     saveData();
@@ -228,92 +188,112 @@ document.querySelectorAll(".craft-btn").forEach(btn => {
 });
 
 document.getElementById("sell-milk-btn")?.addEventListener("click", () => {
-  if (player.milk >= 10) {
-    player.milk -= 10;
-    player.gold += 20;
-    addLog("💰 出售 10 份牛奶，獲得 20 金幣。");
-    updateUI();
-    saveData();
-  }
+  if (player.milk >= 10) { player.milk -= 10; player.gold += 20; updateUI(); saveData(); }
 });
-
 document.getElementById("sell-wood-btn")?.addEventListener("click", () => {
-  if (player.wood >= 10) {
-    player.wood -= 10;
-    player.gold += 30;
-    addLog("💰 出售 10 份木材，獲得 30 金幣。");
-    updateUI();
-    saveData();
-  }
+  if (player.wood >= 10) { player.wood -= 10; player.gold += 30; updateUI(); saveData(); }
 });
 
-// --- 離線收益計算 ---
-function calculateOfflineProgress(lastTime) {
-  const now = Date.now();
-  const diffSec = Math.floor((now - lastTime) / 1000);
-  if (diffSec < 60) return;
-
-  const maxOfflineSec = 12 * 3600;
-  const effectiveSec = Math.min(diffSec, maxOfflineSec);
-  const cycles = Math.floor(effectiveSec / 2);
-
-  const hours = (effectiveSec / 3600).toFixed(1);
-  let rewardText = "";
-
-  if (currentAction === "combat") {
-    const goldEarned = cycles * 5;
-    const expEarned = cycles * 2;
-    player.gold += goldEarned;
-    player.exp += expEarned;
-    rewardText = `💰 獲得 ${goldEarned} 金幣 | ⭐ 獲得 ${expEarned} 經驗`;
-  } else if (currentAction === "milking") {
-    const milkEarned = cycles * 2;
-    player.milk += milkEarned;
-    rewardText = `🥛 採集 ${milkEarned} 牛奶`;
-  } else if (currentAction === "woodcutting") {
-    const woodEarned = cycles * 2;
-    player.wood += woodEarned;
-    rewardText = `🪵 採集 ${woodEarned} 木材`;
+// 排行榜讀取
+async function loadLeaderboard() {
+  const listEl = document.getElementById("rank-list");
+  if (!listEl) return;
+  try {
+    const snap = await get(query(ref(db, "milky_users"), orderByChild("level"), limitToLast(10)));
+    if (snap.exists()) {
+      const users = [];
+      snap.forEach(child => { users.push(child.val()); });
+      users.reverse(); // 降序排列
+      listEl.innerHTML = users.map((u, i) => `
+        <li>
+          <span>#${i + 1} <strong>${u.name || "冒險者"}</strong></span>
+          <span>Lv.${u.level} | 💰 ${u.gold}</span>
+        </li>
+      `).join("");
+    }
+  } catch (err) {
+    listEl.innerHTML = "<li>載入排行榜失敗</li>";
   }
-
-  const summaryEl = document.getElementById("offline-summary");
-  const rewardEl = document.getElementById("offline-rewards");
-  const modalEl = document.getElementById("offline-modal");
-  
-  if (summaryEl) summaryEl.innerText = `你離開了 ${hours} 小時，系統已為你進行自動掛機！`;
-  if (rewardEl) rewardEl.innerText = rewardText;
-  if (modalEl) modalEl.classList.remove("hidden");
 }
+document.getElementById("refresh-rank-btn")?.addEventListener("click", loadLeaderboard);
 
-document.getElementById("claim-offline-btn")?.addEventListener("click", () => {
-  document.getElementById("offline-modal")?.classList.add("hidden");
-  updateUI();
-  saveData();
-});
-
-async function saveData() {
-  if (!currentUid) return;
-  player.lastOnline = Date.now();
-  await update(ref(db, `milky_users/${currentUid}`), player);
-}
-
+// UI 畫面更新
 function updateUI() {
   document.getElementById("player-name").innerText = player.name;
   document.getElementById("player-level").innerText = `Lv.${player.level}`;
   document.getElementById("gold-val").innerText = player.gold;
   document.getElementById("milk-val").innerText = player.milk;
   document.getElementById("wood-val").innerText = player.wood;
-  document.getElementById("eq-weapon").innerText = player.weaponName;
 
-  const invGrid = document.getElementById("inventory-grid");
-  if (invGrid) {
-    invGrid.innerHTML = `
-      <div class="inv-item">🥛 牛奶<span class="count">${player.milk}</span></div>
-      <div class="inv-item">🪵 木材<span class="count">${player.wood}</span></div>
-      <div class="inv-item">🧀 起司<span class="count">${player.cheese}</span></div>
-    `;
+  // 裝備欄更新
+  document.getElementById("eq-weapon-name").innerText = player.equippedWeapon ? player.equippedWeapon.name : "無";
+  document.getElementById("eq-weapon-atk").innerText = player.equippedWeapon ? player.equippedWeapon.val : 0;
+  document.getElementById("eq-armor-name").innerText = player.equippedArmor ? player.equippedArmor.name : "無";
+  document.getElementById("eq-armor-def").innerText = player.equippedArmor ? player.equippedArmor.val : 0;
+
+  // 背包更新
+  const invEl = document.getElementById("inventory-list");
+  if (invEl) {
+    if (player.inventory.length === 0) {
+      invEl.innerHTML = "<p style='color:#64748b;'>背包是空的，快去打怪或鍛造吧！</p>";
+    } else {
+      invEl.innerHTML = player.inventory.map(item => `
+        <div class="inv-card">
+          <span>${item.type === 'weapon' ? '🗡️' : '🛡️'} ${item.name} (${item.type === 'weapon' ? '攻' : '防'} +${item.val})</span>
+          <button onclick="equipItem(${item.id})">裝備</button>
+        </div>
+      `).join("");
+    }
   }
 }
+
+// 裝備穿脫邏輯 (掛載到 window 供 onclick 呼叫)
+window.equipItem = function(id) {
+  const idx = player.inventory.findIndex(i => i.id === id);
+  if (idx === -1) return;
+  const item = player.inventory[idx];
+
+  if (item.type === "weapon") {
+    if (player.equippedWeapon) player.inventory.push(player.equippedWeapon);
+    player.equippedWeapon = item;
+  } else if (item.type === "armor") {
+    if (player.equippedArmor) player.inventory.push(player.equippedArmor);
+    player.equippedArmor = item;
+  }
+  player.inventory.splice(idx, 1);
+  addLog(`⚔️ 成功裝備了 ${item.name}！`);
+  updateUI();
+  saveData();
+};
+
+// 存檔與離線計算
+async function saveData() {
+  if (!currentUid) return;
+  player.lastOnline = Date.now();
+  await update(ref(db, `milky_users/${currentUid}`), player);
+}
+
+function calculateOfflineProgress(lastTime) {
+  const diffSec = Math.floor((Date.now() - lastTime) / 1000);
+  if (diffSec < 60) return;
+  const cycles = Math.floor(Math.min(diffSec, 12 * 3600) / 2);
+
+  if (currentAction === "combat") {
+    const map = MAP_DATA[currentMap];
+    player.gold += cycles * map.gold;
+    player.exp += cycles * map.exp;
+  } else if (currentAction === "milking") { player.milk += cycles * 2; }
+  else if (currentAction === "woodcutting") { player.wood += cycles * 2; }
+
+  document.getElementById("offline-summary").innerText = `離線掛機 ${(diffSec / 3600).toFixed(1)} 小時！`;
+  document.getElementById("offline-rewards").innerText = `獲得大量掛機資源！`;
+  document.getElementById("offline-modal")?.classList.remove("hidden");
+}
+document.getElementById("claim-offline-btn")?.addEventListener("click", () => {
+  document.getElementById("offline-modal")?.classList.add("hidden");
+  updateUI();
+  saveData();
+});
 
 function addLog(msg) {
   const box = document.getElementById("log-box");
@@ -324,9 +304,8 @@ function addLog(msg) {
   box.scrollTop = box.scrollHeight;
 }
 
-// --- 遊戲繪製與主循環 ---
+// 遊戲繪製與主循環
 let lastTime = performance.now();
-
 function gameLoop(now) {
   const dt = now - lastTime;
   lastTime = now;
@@ -338,11 +317,8 @@ function gameLoop(now) {
   }
 
   const pct = Math.min(100, (actionTimer / ACTION_MAX_TIME) * 100);
-  const fillEl = document.getElementById("action-progress-fill");
-  const textEl = document.getElementById("current-action-text");
-  
-  if (fillEl) fillEl.style.width = `${pct}%`;
-  if (textEl) textEl.innerText = `⚡ 當前工作：${getActionName(currentAction)}`;
+  document.getElementById("action-progress-fill").style.width = `${pct}%`;
+  document.getElementById("current-action-text").innerText = `⚡ 當前工作：${getActionName(currentAction)}`;
 
   renderCanvas();
   requestAnimationFrame(gameLoop);
@@ -350,12 +326,20 @@ function gameLoop(now) {
 
 function executeAction() {
   if (currentAction === "combat") {
-    const expGain = 20;
-    const goldGain = 10;
-    player.exp += expGain;
-    player.gold += goldGain;
-    addLog(`⚔️ 擊敗哥布林！金幣 +${goldGain}，經驗 +${expGain}`);
+    const map = MAP_DATA[currentMap];
+    const totalAtk = player.atk + (player.equippedWeapon ? player.equippedWeapon.val : 0);
     
+    player.exp += map.exp;
+    player.gold += map.gold;
+    addLog(`⚔️ 擊敗 ${map.monster}！金幣 +${map.gold}，經驗 +${map.exp}`);
+
+    // 隨機裝備掉落
+    if (Math.random() < map.dropChance) {
+      const drop = { id: Date.now(), name: `${map.name}戰刃`, type: "weapon", val: Math.floor(Math.random() * 10) + 10 };
+      player.inventory.push(drop);
+      addLog(`🎉 幸運獲得掉落物：${drop.name}！`);
+    }
+
     if (player.exp >= player.maxExp) {
       player.level += 1;
       player.exp -= player.maxExp;
@@ -364,10 +348,10 @@ function executeAction() {
     }
   } else if (currentAction === "milking") {
     player.milk += 2;
-    addLog("🥛 擠奶成功，獲得牛奶 x2");
+    addLog("🥛 採集新鮮牛奶 x2");
   } else if (currentAction === "woodcutting") {
     player.wood += 2;
-    addLog("🌲 伐木成功，獲得木材 x2");
+    addLog("🌲 採集優質木材 x2");
   }
   updateUI();
   saveData();
@@ -378,33 +362,38 @@ function renderCanvas() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;
+  const time = Date.now();
 
   if (currentAction === "combat") {
+    const map = MAP_DATA[currentMap];
+    const swing = Math.sin(time / 150) * 12;
+    
+    ctx.font = "50px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(map.icon, cx + swing, cy - 10);
+
+    ctx.fillStyle = "#f8fafc";
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillText(map.monster, cx, cy - 50);
+
+    // 血條
+    const barW = 120;
+    const hpPct = Math.max(0, 1 - (actionTimer / ACTION_MAX_TIME));
+    ctx.fillStyle = "#334155";
+    ctx.fillRect(cx - barW / 2, cy - 35, barW, 8);
     ctx.fillStyle = "#ef4444";
-    ctx.beginPath();
-    ctx.arc(cx + Math.sin(Date.now() / 200) * 30, cy, 20, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.font = "12px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("⚔️ 自動戰鬥中...", cx, cy + 40);
+    ctx.fillRect(cx - barW / 2, cy - 35, barW * hpPct, 8);
+
   } else if (currentAction === "milking") {
-    ctx.fillStyle = "#38bdf8";
-    ctx.beginPath();
-    ctx.arc(cx, cy + Math.sin(Date.now() / 300) * 10, 24, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.font = "12px sans-serif";
+    ctx.font = "52px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("🥛 快樂擠奶中...", cx, cy + 40);
+    ctx.textBaseline = "middle";
+    ctx.fillText("🐮", cx, cy + Math.sin(time / 250) * 8);
   } else if (currentAction === "woodcutting") {
-    ctx.fillStyle = "#22c55e";
-    ctx.beginPath();
-    ctx.arc(cx, cy, 22, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#fff";
-    ctx.font = "12px sans-serif";
+    ctx.font = "52px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("🌲 伐木採集時光...", cx, cy + 40);
+    ctx.textBaseline = "middle";
+    ctx.fillText("🌲", cx, cy);
   }
 }
