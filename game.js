@@ -1,30 +1,80 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { 
-  getDatabase, ref, set, get, onValue, push, remove, update, runTransaction 
+  getAuth, signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, onAuthStateChanged, signOut 
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { 
+  getDatabase, ref, set, get, onValue, onDisconnect, remove, push, update, runTransaction 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-// Firebase 初始化 (略，請保留原本的 config)
+// 請替換為你的 Firebase Config
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
 
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
 let currentUid = null;
 let selectedItemToSell = null;
+let players = {};
+let monster = null;
+const keysPressed = {};
+const MOVE_SPEED = 4;
 
-// 預設玩家背包數據 (無道具時自動補發預設道具)
 let myData = {
   id: "",
   name: "玩家",
+  x: 400,
+  y: 300,
+  targetX: 400,
+  targetY: 300,
+  color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
+  score: 0,
   gold: 100,
   inventory: [
     { id: "item_sword_01", name: "🗡️ 鐵劍", type: "weapon" },
-    { id: "item_potion_01", name: "🧪 高級生命藥水", type: "consumable" },
-    { id: "item_ring_01", name: "💍 力量戒指", type: "accessory" }
+    { id: "item_potion_01", name: "🧪 藥水", type: "consumable" }
   ]
 };
 
-// 1. 初始化與即時數據監聽
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+// 面板按鈕綁定 (防止作用域問題)
+document.getElementById("tab-inventory-btn").addEventListener("click", () => {
+  document.getElementById("inventory-panel").classList.toggle("hidden");
+  document.getElementById("market-panel").classList.add("hidden");
+});
+
+document.getElementById("tab-market-btn").addEventListener("click", () => {
+  document.getElementById("market-panel").classList.toggle("hidden");
+  document.getElementById("inventory-panel").classList.add("hidden");
+});
+
+document.getElementById("close-inventory-btn").addEventListener("click", () => {
+  document.getElementById("inventory-panel").classList.add("hidden");
+});
+
+document.getElementById("close-market-btn").addEventListener("click", () => {
+  document.getElementById("market-panel").classList.add("hidden");
+});
+
+// Auth 監聽
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUid = user.uid;
@@ -33,22 +83,64 @@ onAuthStateChanged(auth, async (user) => {
     if (userSnap.exists()) {
       Object.assign(myData, userSnap.val());
     } else {
+      myData.name = document.getElementById("nickname-input").value.trim() || user.displayName || "冒險者";
       await set(ref(db, `users/${currentUid}`), myData);
     }
 
+    document.getElementById("login-modal").style.display = "none";
+    initOnlineGame();
     renderInventory();
-    listenToMarket(); // 開始監聽全服拍賣行
+    listenToMarket();
   }
 });
 
-// 2. 渲染玩家背包 UI
+// Email / Google 登入
+document.getElementById("google-btn").addEventListener("click", () => signInWithPopup(auth, new GoogleAuthProvider()));
+document.getElementById("auth-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = document.getElementById("email-input").value;
+  const password = document.getElementById("password-input").value;
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+  } catch (err) {
+    if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") {
+      await createUserWithEmailAndPassword(auth, email, password);
+    }
+  }
+});
+
+document.getElementById("logout-btn").addEventListener("click", async () => {
+  if (currentUid) await remove(ref(db, `players/${currentUid}`));
+  await signOut(auth);
+  window.location.reload();
+});
+
+function initOnlineGame() {
+  myData.id = currentUid;
+  myData.x = Math.random() * (canvas.width - 100) + 50;
+  myData.y = Math.random() * (canvas.height - 100) + 50;
+  myData.targetX = myData.x;
+  myData.targetY = myData.y;
+
+  const myPlayerRef = ref(db, `players/${currentUid}`);
+  onDisconnect(myPlayerRef).remove();
+  set(myPlayerRef, myData);
+
+  onValue(ref(db, "players"), snapshot => { players = snapshot.val() || {}; });
+  onValue(ref(db, "monster"), snapshot => { monster = snapshot.val(); });
+
+  setupControls();
+  requestAnimationFrame(gameLoop);
+}
+
 function renderInventory() {
   const container = document.getElementById("inventory-list");
   document.getElementById("player-gold-display").innerText = `💰 當前金幣: ${myData.gold}`;
+  document.getElementById("user-info").innerText = `玩家: ${myData.name} | 💰 ${myData.gold}`;
   container.innerHTML = "";
 
   if (!myData.inventory || myData.inventory.length === 0) {
-    container.innerHTML = "<p style='grid-column: span 2; font-size: 12px; color: #888;'>背包是空的</p>";
+    container.innerHTML = "<p style='grid-column: span 2; font-size: 11px; color: #888;'>背包是空的</p>";
     return;
   }
 
@@ -56,142 +148,163 @@ function renderInventory() {
     const card = document.createElement("div");
     card.className = "item-card";
     card.innerText = item.name;
-    card.onclick = () => selectItemForSale(item, index);
+    card.onclick = () => {
+      selectedItemToSell = { ...item, originalIndex: index };
+      document.getElementById("sell-item-name").innerText = item.name;
+      document.getElementById("sell-box").classList.remove("hidden");
+    };
     container.appendChild(card);
   });
 }
 
-// 3. 選擇物品進行上架
-function selectItemForSale(item, index) {
-  selectedItemToSell = { ...item, originalIndex: index };
-  document.getElementById("sell-item-name").innerText = item.name;
-  document.getElementById("sell-box").classList.remove("hidden");
-}
-
-// 4. 確認上架到拍賣行 (寫入 Firebase `market`)
 document.getElementById("confirm-sell-btn").addEventListener("click", async () => {
-  const priceInput = document.getElementById("sell-price-input");
-  const price = parseInt(priceInput.value);
+  const price = parseInt(document.getElementById("sell-price-input").value);
+  if (!selectedItemToSell || isNaN(price) || price <= 0) return alert("請輸入售價！");
 
-  if (!selectedItemToSell || isNaN(price) || price <= 0) {
-    return alert("請輸入有效的售價！");
-  }
-
-  // A. 從玩家背包中移除該道具
   myData.inventory.splice(selectedItemToSell.originalIndex, 1);
   await update(ref(db, `users/${currentUid}`), { inventory: myData.inventory });
 
-  // B. 推送至全服拍賣行 (`market` 節點)
-  const marketRef = ref(db, "market");
-  await push(marketRef, {
+  await push(ref(db, "market"), {
     sellerUid: currentUid,
     sellerName: myData.name,
-    item: { id: selectedItemToSell.id, name: selectedItemToSell.name, type: selectedItemToSell.type },
-    price: price,
-    timestamp: Date.now()
+    item: selectedItemToSell,
+    price: price
   });
 
-  // C. 重置 UI
   selectedItemToSell = null;
-  priceInput.value = "";
   document.getElementById("sell-box").classList.add("hidden");
   renderInventory();
-  alert("商品已成功上架拍賣行！");
 });
 
-// 5. 即時監聽全服拍賣行 (Market Real-time Sync)
 function listenToMarket() {
   onValue(ref(db, "market"), (snapshot) => {
-    const marketList = document.getElementById("market-list");
-    marketList.innerHTML = "";
+    const list = document.getElementById("market-list");
+    list.innerHTML = "";
     const items = snapshot.val();
 
     if (!items) {
-      marketList.innerHTML = "<p style='font-size: 12px; color: #888; text-align: center;'>拍賣行目前沒有商品</p>";
+      list.innerHTML = "<p style='font-size: 11px; color: #888; text-align: center;'>拍賣行空無一物</p>";
       return;
     }
 
-    Object.entries(items).forEach(([listingId, data]) => {
-      const itemRow = document.createElement("div");
-      itemRow.className = "market-item";
+    Object.entries(items).forEach(([id, data]) => {
+      const row = document.createElement("div");
+      row.className = "market-item";
+      const isMine = data.sellerUid === currentUid;
 
-      const isMyItem = data.sellerUid === currentUid;
-
-      itemRow.innerHTML = `
-        <div class="market-item-info">
-          <strong>${data.item.name}</strong>
-          <span class="seller">賣家: ${data.sellerName} ${isMyItem ? "(你自己)" : ""}</span>
+      row.innerHTML = `
+        <div style="font-size:11px;">
+          <strong>${data.item.name}</strong><br>
+          <span style="color:#888;">💰 ${data.price} (${data.sellerName})</span>
         </div>
-        <div class="market-item-price">💰 ${data.price}</div>
       `;
 
-      const buyBtn = document.createElement("button");
-      buyBtn.className = "action-btn-sm blue";
-      buyBtn.style.width = "60px";
-      buyBtn.innerText = isMyItem ? "下架" : "購買";
+      const btn = document.createElement("button");
+      btn.className = "action-btn-sm blue";
+      btn.style.width = "50px";
+      btn.innerText = isMine ? "下架" : "購買";
+      btn.onclick = () => isMine ? cancelListing(id, data) : buyItem(id, data);
 
-      buyBtn.onclick = () => {
-        if (isMyItem) {
-          cancelListing(listingId, data);
-        } else {
-          buyMarketItem(listingId, data);
-        }
-      };
-
-      itemRow.appendChild(buyBtn);
-      marketList.appendChild(itemRow);
+      row.appendChild(btn);
+      list.appendChild(row);
     });
   });
 }
 
-// 6. 購買商品 (採用 Atomic Transaction 防搶購競態)
-async function buyMarketItem(listingId, listingData) {
-  if (myData.gold < listingData.price) {
-    return alert("你的金幣不足！");
-  }
+async function buyItem(id, data) {
+  if (myData.gold < data.price) return alert("金幣不足！");
+  const listingRef = ref(db, `market/${id}`);
+  const snap = await get(listingRef);
+  if (!snap.exists()) return alert("商品已被買走！");
 
-  const listingRef = ref(db, `market/${listingId}`);
-
-  // 檢查物品是否仍在拍賣場上
-  const snapshot = await get(listingRef);
-  if (!snapshot.exists()) {
-    return alert("太慢了！該商品已被其他玩家買走或下架。");
-  }
-
-  // A. 買家扣款與發貨
-  myData.gold -= listingData.price;
+  myData.gold -= data.price;
   if (!myData.inventory) myData.inventory = [];
-  myData.inventory.push(listingData.item);
+  myData.inventory.push(data.item);
 
-  // 更新買家個人資料
-  await update(ref(db, `users/${currentUid}`), {
-    gold: myData.gold,
-    inventory: myData.inventory
-  });
-
-  // B. 賣家入帳 (使用 Firebase Transaction 確保原子性累加金幣)
-  const sellerGoldRef = ref(db, `users/${listingData.sellerUid}/gold`);
-  await runTransaction(sellerGoldRef, (currentGold) => {
-    return (currentGold || 0) + listingData.price;
-  });
-
-  // C. 成功完成後移除拍賣行商品節點
+  await update(ref(db, `users/${currentUid}`), { gold: myData.gold, inventory: myData.inventory });
+  await runTransaction(ref(db, `users/${data.sellerUid}/gold`), gold => (gold || 0) + data.price);
   await remove(listingRef);
 
   renderInventory();
-  alert(`成功購買 ${listingData.item.name}！`);
 }
 
-// 7. 下架自己的商品
-async function cancelListing(listingId, listingData) {
-  // 移除拍賣場節點
-  await remove(ref(db, `market/${listingId}`));
-
-  // 物品退回背包
+async function cancelListing(id, data) {
+  await remove(ref(db, `market/${id}`));
   if (!myData.inventory) myData.inventory = [];
-  myData.inventory.push(listingData.item);
-
+  myData.inventory.push(data.item);
   await update(ref(db, `users/${currentUid}`), { inventory: myData.inventory });
   renderInventory();
-  alert("已成功下架商品並退回背包！");
+}
+
+function setupControls() {
+  canvas.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("#chat-container") || e.target.closest("#touch-ui") || e.target.closest(".game-panel") || e.target.closest("#side-menu-tabs")) return;
+    myData.targetX = e.clientX;
+    myData.targetY = e.clientY;
+    syncPosition();
+  });
+
+  document.getElementById("attack-btn").addEventListener("click", performAttack);
+}
+
+function performAttack() {
+  if (!monster) return;
+  if (Math.hypot(myData.x - monster.x, myData.y - monster.y) < 60) {
+    myData.gold += 10;
+    renderInventory();
+    update(ref(db, `users/${currentUid}`), { gold: myData.gold });
+    set(ref(db, "monster"), {
+      x: Math.random() * (canvas.width - 100) + 50,
+      y: Math.random() * (canvas.height - 100) + 50
+    });
+  }
+}
+
+function updateMovement() {
+  const dx = myData.targetX - myData.x;
+  const dy = myData.targetY - myData.y;
+  const dist = Math.hypot(dx, dy);
+
+  if (dist > MOVE_SPEED) {
+    myData.x += (dx / dist) * MOVE_SPEED;
+    myData.y += (dy / dist) * MOVE_SPEED;
+    syncPosition();
+  }
+}
+
+let lastSync = 0;
+function syncPosition() {
+  const now = Date.now();
+  if (now - lastSync > 50) {
+    set(ref(db, `players/${currentUid}`), myData);
+    lastSync = now;
+  }
+}
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (monster) {
+    ctx.beginPath();
+    ctx.arc(monster.x, monster.y, 20, 0, Math.PI * 2);
+    ctx.fillStyle = "#e74c3c";
+    ctx.fill();
+  }
+
+  Object.values(players).forEach(p => {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 15, 0, Math.PI * 2);
+    ctx.fillStyle = p.color || "#3498db";
+    ctx.fill();
+    ctx.fillStyle = "white";
+    ctx.font = "12px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(`${p.name}`, p.x, p.y - 20);
+  });
+}
+
+function gameLoop() {
+  updateMovement();
+  render();
+  requestAnimationFrame(gameLoop);
 }
