@@ -1,33 +1,86 @@
-<!-- 右側功能選單按鈕 -->
-<div id="side-menu-tabs">
-  <button onclick="togglePanel('inventory-panel')">🎒 背包</button>
-  <button onclick="togglePanel('market-panel')">⚖️ 交易所</button>
-</div>
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>HTML5 多人線上 RPG 遊戲</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-<!-- 浮動面板：背包 & 裝備上架 -->
-<div id="inventory-panel" class="game-panel hidden">
-  <div class="panel-header">
-    <h3>🎒 玩家背包</h3>
-    <button class="close-btn" onclick="togglePanel('inventory-panel')">✕</button>
+  <!-- 1. 創角/登入 Modal -->
+  <div id="login-modal" class="modal">
+    <div class="modal-content">
+      <h2>登入 RPG 世界</h2>
+      <button id="google-btn" class="auth-btn google">🌐 使用 Google 帳號登入</button>
+      <div class="divider">或使用 Email</div>
+      <form id="auth-form">
+        <input type="email" id="email-input" placeholder="電子郵件 Email" required>
+        <input type="password" id="password-input" placeholder="密碼" required>
+        <input type="text" id="nickname-input" placeholder="角色暱稱" maxlength="10" required>
+        <button type="submit" id="submit-auth-btn" class="auth-btn submit">登入 / 註冊</button>
+      </form>
+      <p id="auth-error" class="error-msg"></p>
+    </div>
   </div>
-  <p id="player-gold-display">💰 當前金幣: 0</p>
-  <hr style="border-color: #444; margin: 8px 0;">
-  <h4>道具列表 (點擊可選擇上架)</h4>
-  <div id="inventory-list" class="item-grid"></div>
-  
-  <!-- 上架控制區 -->
-  <div id="sell-box" class="sell-box hidden">
-    <p>準備上架: <strong id="sell-item-name">--</strong></p>
-    <input type="number" id="sell-price-input" placeholder="請設定售價 (金幣)" min="1">
-    <button id="confirm-sell-btn" class="action-btn-sm green">確認上架拍賣行</button>
-  </div>
-</div>
 
-<!-- 浮動面板：拍賣行 / 交易所 -->
-<div id="market-panel" class="game-panel hidden">
-  <div class="panel-header">
-    <h3>⚖️ 全服拍賣行</h3>
-    <button class="close-btn" onclick="togglePanel('market-panel')">✕</button>
+  <!-- 2. 遊戲主要容器 -->
+  <div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- 頂部狀態列 -->
+    <div id="user-bar">
+      <span id="user-info">玩家: -- | 💰 0</span>
+      <button id="logout-btn">登出</button>
+    </div>
+
+    <!-- 右上角選單按鈕 -->
+    <div id="side-menu-tabs">
+      <button id="tab-inventory-btn">🎒 背包</button>
+      <button id="tab-market-btn">⚖️ 交易所</button>
+    </div>
+
+    <!-- 背包面板 (預設隱藏 hidden) -->
+    <div id="inventory-panel" class="game-panel hidden">
+      <div class="panel-header">
+        <h3>🎒 玩家背包</h3>
+        <button class="close-btn" id="close-inventory-btn">✕</button>
+      </div>
+      <p id="player-gold-display">💰 當前金幣: 0</p>
+      <hr style="border-color: #444; margin: 8px 0;">
+      <div id="inventory-list" class="item-grid"></div>
+      
+      <div id="sell-box" class="sell-box hidden">
+        <p>上架道具: <strong id="sell-item-name">--</strong></p>
+        <input type="number" id="sell-price-input" placeholder="售價" min="1">
+        <button id="confirm-sell-btn" class="action-btn-sm green">確認上架</button>
+      </div>
+    </div>
+
+    <!-- 交易所面板 (預設隱藏 hidden) -->
+    <div id="market-panel" class="game-panel hidden">
+      <div class="panel-header">
+        <h3>⚖️ 全服拍賣行</h3>
+        <button class="close-btn" id="close-market-btn">✕</button>
+      </div>
+      <div id="market-list" class="market-list"></div>
+    </div>
+
+    <!-- 手機攻擊按鈕 -->
+    <div id="touch-ui">
+      <button id="attack-btn" class="action-btn">⚔️ 攻擊</button>
+    </div>
+
+    <!-- 聊天室 -->
+    <div id="chat-container">
+      <div id="chat-messages"></div>
+      <form id="chat-form">
+        <input type="text" id="chat-input" placeholder="發送訊息..." autocomplete="off">
+        <button type="submit">發送</button>
+      </form>
+    </div>
   </div>
-  <div id="market-list" class="market-list"></div>
-</div>
+
+  <script type="module" src="game.js"></script>
+</body>
+</html>
