@@ -9,13 +9,14 @@ import {
 
 // ⚠️ 請替換為你自己的 Firebase 金鑰 ⚠️
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyCMDqo_WjGtGevTHcu4VFgcngyge66hJ60",
+    authDomain: "go-rpg-game.firebaseapp.com",
+    databaseURL: "https://go-rpg-game-default-rtdb.firebaseio.com",
+    projectId: "go-rpg-game",
+    storageBucket: "go-rpg-game.firebasestorage.app",
+    messagingSenderId: "903016119451",
+    appId: "1:903016119451:web:6e90207567f5ca27e99a3e",
+    measurementId: "G-RDK6HNMW9Z"
 };
 
 const app = initializeApp(firebaseConfig);
