@@ -4,18 +4,17 @@ import {
   createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { 
-  getDatabase, ref, set, get, onValue, onDisconnect, remove, update, runTransaction, serverTimestamp 
+  getDatabase, ref, set, get, update 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
 const firebaseConfig = {
-    apiKey: "AIzaSyCMDqo_WjGtGevTHcu4VFgcngyge66hJ60",
-    authDomain: "go-rpg-game.firebaseapp.com",
-    databaseURL: "https://go-rpg-game-default-rtdb.firebaseio.com",
-    projectId: "go-rpg-game",
-    storageBucket: "go-rpg-game.firebasestorage.app",
-    messagingSenderId: "903016119451",
-    appId: "1:903016119451:web:6e90207567f5ca27e99a3e",
-    measurementId: "G-RDK6HNMW9Z"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -26,69 +25,164 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 let currentUid = null;
-let monster = null;
-let monsterRef = null;
-const MOVE_SPEED = 2; // 緩慢推進速度
+let currentAction = "combat"; // 預設工作：combat, milking, woodcutting
+let actionTimer = 0;
+const ACTION_MAX_TIME = 2000; // 2 秒完成一次循環
 
-let myData = {
+// 角色核心數據
+let player = {
   name: "冒險者",
   level: 1,
   exp: 0,
   maxExp: 100,
-  hp: 100,
-  maxHp: 100,
-  atk: 10,
   gold: 0,
-  stage: 1,
-  x: 50,
-  y: 200,
-  weaponName: "木棍",
-  weaponAtk: 0
+  milk: 0,
+  wood: 0,
+  cheese: 0,
+  atk: 10,
+  weaponAtk: 0,
+  weaponName: "無",
+  lastOnline: Date.now()
 };
 
+// Canvas 自適應
 function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  canvas.width = canvas.parentElement.clientWidth;
+  canvas.height = canvas.parentElement.clientHeight;
 }
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
-// 面板按鈕綁定
-document.getElementById("upgrade-btn").addEventListener("click", async () => {
-  const upgradeCost = myData.level * 50;
-  if (myData.gold >= upgradeCost) {
-    myData.gold -= upgradeCost;
-    myData.atk += 10;
-    myData.weaponAtk += 10;
-    document.getElementById("weapon-slot").innerText = `武器: +${myData.weaponAtk} 攻擊`;
-    await saveData();
-    addLog(`⚔️ 強化攻擊力！消耗 ${upgradeCost} 金幣。`);
+// UI 頁籤切換邏輯 (手機專用 Tab)
+document.querySelectorAll(".nav-btn").forEach(btn => {
+  btn.addEventListener("click", (e) => {
+    document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+    
+    e.target.classList.add("active");
+    const targetTab = e.target.getAttribute("data-tab");
+    document.getElementById(targetTab).classList.add("active");
+  });
+});
+
+// 工作切換綁定
+document.querySelectorAll(".action-card").forEach(card => {
+  card.addEventListener("click", () => {
+    document.querySelectorAll(".action-card").forEach(c => c.classList.remove("active-work"));
+    card.classList.add("active-work");
+    currentAction = card.getAttribute("data-action");
+    actionTimer = 0;
+    addLog(`🔄 切換工作：${getActionName(currentAction)}`);
+  });
+});
+
+function getActionName(act) {
+  if (act === "combat") return "⚔️ 自動打怪";
+  if (act === "milking") return "🥛 牧場擠奶";
+  if (act === "woodcutting") return "🌲 森林伐木";
+  return "空閒";
+}
+
+// 鍛造與黑市交易綁定
+document.querySelectorAll(".craft-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const type = btn.getAttribute("data-craft");
+    if (type === "cheese" && player.milk >= 5) {
+      player.milk -= 5;
+      player.cheese += 1;
+      addLog("🧀 成功製作濃縮牛奶起司！");
+    } else if (type === "sword" && player.wood >= 10 && player.gold >= 50) {
+      player.wood -= 10;
+      player.gold -= 50;
+      player.weaponAtk = 15;
+      player.weaponName = "精鋼長劍";
+      addLog("🗡️ 成功鍛造精鋼長劍！攻擊力 +15");
+    } else {
+      addLog("❌ 資源不足，無法合成！");
+    }
     updateUI();
-  } else {
-    addLog("不足，無法強化！");
+    saveData();
+  });
+});
+
+document.getElementById("sell-milk-btn").addEventListener("click", () => {
+  if (player.milk >= 10) {
+    player.milk -= 10;
+    player.gold += 20;
+    addLog("💰 出售 10 份牛奶，獲得 20 金幣。");
+    updateUI();
+    saveData();
   }
 });
 
-// Auth 身份監聽與自動創角/讀檔
+document.getElementById("sell-wood-btn").addEventListener("click", () => {
+  if (player.wood >= 10) {
+    player.wood -= 10;
+    player.gold += 30;
+    addLog("💰 出售 10 份木材，獲得 30 金幣。");
+    updateUI();
+    saveData();
+  }
+});
+
+// 離線收益計算 (離線時間上限 12 小時)
+function calculateOfflineProgress(lastTime) {
+  const now = Date.now();
+  const diffSec = Math.floor((now - lastTime) / 1000);
+  if (diffSec < 60) return; // 小於 1 分鐘忽略
+
+  const maxOfflineSec = 12 * 3600;
+  const effectiveSec = Math.min(diffSec, maxOfflineSec);
+  const cycles = Math.floor(effectiveSec / 2); // 每 2 秒一次循環
+
+  const hours = (effectiveSec / 3600).toFixed(1);
+  let rewardText = "";
+
+  if (currentAction === "combat") {
+    const goldEarned = cycles * 5;
+    const expEarned = cycles * 2;
+    player.gold += goldEarned;
+    player.exp += expEarned;
+    rewardText = `💰 獲得 ${goldEarned} 金幣 | ⭐ 獲得 ${expEarned} 經驗`;
+  } else if (currentAction === "milking") {
+    const milkEarned = cycles * 2;
+    player.milk += milkEarned;
+    rewardText = `🥛 採集 ${milkEarned} 牛奶`;
+  } else if (currentAction === "woodcutting") {
+    const woodEarned = cycles * 2;
+    player.wood += woodEarned;
+    rewardText = `🪵 採集 ${woodEarned} 木材`;
+  }
+
+  document.getElementById("offline-summary").innerText = `你離開了 ${hours} 小時，系統已為你進行自動掛機！`;
+  document.getElementById("offline-rewards").innerText = rewardText;
+  document.getElementById("offline-modal").classList.remove("hidden");
+}
+
+document.getElementById("claim-offline-btn").addEventListener("click", () => {
+  document.getElementById("offline-modal").classList.add("hidden");
+  updateUI();
+  saveData();
+});
+
+// Auth 監聽
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUid = user.uid;
-    const userSnap = await get(ref(db, `users/${currentUid}`));
-    
-    if (userSnap.exists()) {
-      Object.assign(myData, userSnap.val());
+    const snap = await get(ref(db, `milky_users/${currentUid}`));
+    if (snap.exists()) {
+      Object.assign(player, snap.val());
+      calculateOfflineProgress(player.lastOnline);
     } else {
-      myData.name = document.getElementById("nickname-input").value.trim() || user.displayName || "冒險者";
-      await set(ref(db, `users/${currentUid}`), myData);
+      player.name = document.getElementById("nickname-input").value.trim() || user.displayName || "冒險者";
+      await set(ref(db, `milky_users/${currentUid}`), player);
     }
-
     document.getElementById("login-modal").style.display = "none";
-    initIdleGame();
     updateUI();
+    requestAnimationFrame(gameLoop);
   }
 });
 
-// Google 與 Email 登入邏輯
 getRedirectResult(auth).catch(err => { document.getElementById("auth-error").innerText = err.message; });
 const provider = new GoogleAuthProvider();
 document.getElementById("google-btn").addEventListener("click", () => signInWithRedirect(auth, provider));
@@ -102,7 +196,7 @@ document.getElementById("auth-form").addEventListener("submit", async (e) => {
   } catch (err) {
     if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") {
       try { await createUserWithEmailAndPassword(auth, email, password); } 
-      catch (createErr) { document.getElementById("auth-error").innerText = createErr.message; }
+      catch (cErr) { document.getElementById("auth-error").innerText = cErr.message; }
     } else {
       document.getElementById("auth-error").innerText = err.message;
     }
@@ -110,198 +204,123 @@ document.getElementById("auth-form").addEventListener("submit", async (e) => {
 });
 
 document.getElementById("logout-btn").addEventListener("click", async () => {
-  if (currentUid) await remove(ref(db, `players/${currentUid}`));
+  await saveData();
   await signOut(auth);
   window.location.reload();
 });
 
-// 初始化放置遊戲
-function initIdleGame() {
-  monsterRef = ref(db, "monster");
-  
-  // 監聽怪物狀態（單一怪物被全服共享，或每個關卡獨立生成）
-  onValue(monsterRef, (snapshot) => {
-    monster = snapshot.val();
-  });
-
-  setupMonsterSpawner();
-  requestAnimationFrame(gameLoop);
-}
-
-// 關卡怪物生成邏輯
-function setupMonsterSpawner() {
-  if (currentUid) {
-    // 檢查怪物是否死亡或不存在，由系統/第一個玩家生成
-    get(monsterRef).then(snapshot => {
-      if (!snapshot.exists()) {
-        spawnNewMonster();
-      }
-    });
-  }
-}
-
-function spawnNewMonster() {
-  const hp = 50 + (myData.stage * 20);
-  const maxHp = hp;
-  set(monsterRef, {
-    hp: hp,
-    maxHp: maxHp,
-    name: "哥布林",
-    x: window.innerWidth - 100,
-    y: 200,
-    alive: true
-  });
-}
-
-// 保存進度至 Firebase
+// 資料保存
 async function saveData() {
-  await update(ref(db, `users/${currentUid}`), myData);
+  if (!currentUid) return;
+  player.lastOnline = Date.now();
+  await update(ref(db, `milky_users/${currentUid}`), player);
 }
 
-// 懸浮字體特效
-function showDamageText(x, y, damage) {
-  const span = document.createElement("div");
-  span.className = "damage-text";
-  span.innerText = damage;
-  span.style.left = `${x}px`;
-  span.style.top = `${y - 20}px`;
-  document.body.appendChild(span);
-  setTimeout(() => span.remove(), 500);
-}
-
-// UI 更新
+// UI 畫面刷新
 function updateUI() {
-  document.getElementById("player-info").innerText = `${myData.name} [Lv.${myData.level}]`;
-  document.getElementById("player-stats").innerText = `⚔️ 攻擊力: ${myData.atk} | 🩸 生命值: ${myData.hp}`;
-  document.getElementById("player-gold").innerText = `💰 金幣: ${myData.gold}`;
-  document.getElementById("current-stage").innerText = `🗺️ 關卡: 第 ${myData.stage} 層`;
-  document.getElementById("weapon-slot").innerText = `武器: +${myData.weaponAtk} 攻擊`;
+  document.getElementById("player-name").innerText = player.name;
+  document.getElementById("player-level").innerText = `Lv.${player.level}`;
+  document.getElementById("gold-val").innerText = player.gold;
+  document.getElementById("milk-val").innerText = player.milk;
+  document.getElementById("wood-val").innerText = player.wood;
+  document.getElementById("eq-weapon").innerText = player.weaponName;
 
-  const expPct = Math.min(100, (myData.exp / myData.maxExp) * 100);
-  document.getElementById("exp-fill").style.width = `${expPct}%`;
+  // 更新背包格
+  const invGrid = document.getElementById("inventory-grid");
+  invGrid.innerHTML = `
+    <div class="inv-item">🥛 牛奶<span class="count">${player.milk}</span></div>
+    <div class="inv-item">🪵 木材<span class="count">${player.wood}</span></div>
+    <div class="inv-item">🧀 起司<span class="count">${player.cheese}</span></div>
+  `;
 }
 
-function addLog(text) {
-  const logBox = document.getElementById("log-messages");
+function addLog(msg) {
+  const box = document.getElementById("log-box");
   const div = document.createElement("div");
-  div.innerText = text;
-  logBox.appendChild(div);
-  logBox.scrollTop = logBox.scrollHeight;
+  div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
 }
 
-// 戰鬥與掛機計算
-let lastAttackTime = 0;
-const ATTACK_INTERVAL = 1000; // 每秒自動攻擊一次
+// 核心循環：更新與渲染
+let lastTime = performance.now();
 
-function updateGameLogic() {
-  if (!monster || !monster.alive) return;
+function gameLoop(now) {
+  const dt = now - lastTime;
+  lastTime = now;
 
-  // 自動攻擊邏輯（角色碰到怪物範圍內即刻施放）
-  const dist = Math.hypot((window.innerWidth - 100) - myData.x, monster.y - myData.y);
-  if (dist < 150) {
-    const now = Date.now();
-    if (now - lastAttackTime > ATTACK_INTERVAL) {
-      monster.hp -= myData.atk;
-      showDamageText(window.innerWidth - 100, 200, myData.atk);
-
-      if (monster.hp <= 0) {
-        monster.alive = false;
-        handleMonsterKilled();
-      } else {
-        // 同步扣血
-        set(ref(db, "monster/hp"), monster.hp);
-      }
-      lastAttackTime = now;
-    }
-  } else {
-    // 角色緩慢向前移動靠攏怪物
-    myData.x += MOVE_SPEED;
-  }
-}
-
-// 擊殺結算
-async function handleMonsterKilled() {
-  addLog(`💀 擊殺 ${monster.name}！獲得獎勵。`);
-  
-  // 獲得金幣與經驗
-  myData.gold += 15 * myData.stage;
-  myData.exp += 30;
-
-  // 升級檢測
-  if (myData.exp >= myData.maxExp) {
-    myData.level += 1;
-    myData.exp -= myData.maxExp;
-    myData.maxExp = Math.floor(myData.maxExp * 1.2);
-    myData.maxHp += 20;
-    myData.hp = myData.maxHp;
-    myData.atk += 10;
-    addLog(`🎉 升級！等級提升至 Lv.${myData.level}！`);
+  actionTimer += dt;
+  if (actionTimer >= ACTION_MAX_TIME) {
+    actionTimer = 0;
+    executeAction();
   }
 
-  // 自動推進關卡
-  if (myData.level % 5 === 0 && myData.level !== 1) {
-    myData.stage += 1;
-    addLog(`⏩ 突破關卡！進入第 ${myData.stage} 層！`);
-  }
+  // 更新進度條
+  const pct = Math.min(100, (actionTimer / ACTION_MAX_TIME) * 100);
+  document.getElementById("action-progress-fill").style.width = `${pct}%`;
+  document.getElementById("current-action-text").innerText = `⚡ 當前工作：${getActionName(currentAction)}`;
 
-  updateUI();
-  await saveData();
-
-  // 延遲重生下一隻怪
-  setTimeout(() => {
-    spawnNewMonster();
-  }, 2000);
-}
-
-// 畫面渲染
-function render() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // 繪製背景元素（簡單的地面線）
-  ctx.strokeStyle = "#444";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(0, 250);
-  ctx.lineTo(window.innerWidth, 250);
-  ctx.stroke();
-
-  // 繪製角色 (勇者)
-  ctx.beginPath();
-  ctx.arc(myData.x, 220, 25, 0, Math.PI * 2);
-  ctx.fillStyle = "#3498db";
-  ctx.fill();
-  ctx.strokeStyle = "#fff";
-  ctx.lineWidth = 2;
-  ctx.stroke();
-
-  ctx.fillStyle = "white";
-  ctx.font = "12px Arial";
-  ctx.textAlign = "center";
-  ctx.fillText(myData.name, myData.x, 180);
-
-  // 繪製怪物
-  if (monster && monster.alive) {
-    ctx.beginPath();
-    ctx.arc(window.innerWidth - 100, 220, 30, 0, Math.PI * 2);
-    ctx.fillStyle = "#e74c3c";
-    ctx.fill();
-    ctx.strokeStyle = "#fff";
-    ctx.stroke();
-
-    // 怪物血條
-    const hpPct = Math.max(0, monster.hp / monster.maxHp);
-    ctx.fillStyle = "#c0392b";
-    ctx.fillRect(window.innerWidth - 140, 270, 80, 8);
-    ctx.fillStyle = "#2ecc71";
-    ctx.fillRect(window.innerWidth - 140, 270, 80 * hpPct, 8);
-
-    ctx.fillStyle = "white";
-    ctx.fillText(`${monster.name} (HP: ${monster.hp})`, window.innerWidth - 100, 180);
-  }
-}
-
-function gameLoop() {
-  updateGameLogic();
-  render();
+  renderCanvas();
   requestAnimationFrame(gameLoop);
+}
+
+function executeAction() {
+  if (currentAction === "combat") {
+    const expGain = 20;
+    const goldGain = 10;
+    player.exp += expGain;
+    player.gold += goldGain;
+    addLog(`⚔️ 擊敗哥布林！金幣 +${goldGain}，經驗 +${expGain}`);
+    
+    if (player.exp >= player.maxExp) {
+      player.level += 1;
+      player.exp -= player.maxExp;
+      player.maxExp = Math.floor(player.maxExp * 1.3);
+      addLog(`🎉 恭喜升級至 Lv.${player.level}！`);
+    }
+  } else if (currentAction === "milking") {
+    player.milk += 2;
+    addLog("🥛 擠奶成功，獲得牛奶 x2");
+  } else if (currentAction === "woodcutting") {
+    player.wood += 2;
+    addLog("🌲 伐木成功，獲得木材 x2");
+  }
+  updateUI();
+  saveData();
+}
+
+function renderCanvas() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+
+  // 根據工作繪製不同主題動畫
+  if (currentAction === "combat") {
+    ctx.fillStyle = "#ef4444";
+    ctx.beginPath();
+    ctx.arc(cx + Math.sin(Date.now() / 200) * 30, cy, 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("⚔️ 自動戰鬥中...", cx, cy + 40);
+  } else if (currentAction === "milking") {
+    ctx.fillStyle = "#38bdf8";
+    ctx.beginPath();
+    ctx.arc(cx, cy + Math.sin(Date.now() / 300) * 10, 24, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("🥛 快樂擠奶中...", cx, cy + 40);
+  } else if (currentAction === "woodcutting") {
+    ctx.fillStyle = "#22c55e";
+    ctx.beginPath();
+    ctx.arc(cx, cy, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.font = "12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("🌲 伐木採集時光...", cx, cy + 40);
+  }
 }
