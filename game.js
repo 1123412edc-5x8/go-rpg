@@ -7,15 +7,15 @@ import {
   getDatabase, ref, set, get, update 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
+// ⚠️ 請填入你自己的 Firebase 金鑰 ⚠️
 const firebaseConfig = {
-    apiKey: "AIzaSyCMDqo_WjGtGevTHcu4VFgcngyge66hJ60",
-    authDomain: "go-rpg-game.firebaseapp.com",
-    databaseURL: "https://go-rpg-game-default-rtdb.firebaseio.com",
-    projectId: "go-rpg-game",
-    storageBucket: "go-rpg-game.firebasestorage.app",
-    messagingSenderId: "903016119451",
-    appId: "1:903016119451:web:6e90207567f5ca27e99a3e",
-    measurementId: "G-RDK6HNMW9Z"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -26,11 +26,10 @@ const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 let currentUid = null;
-let currentAction = "combat"; // 預設工作：combat, milking, woodcutting
+let currentAction = "combat";
 let actionTimer = 0;
-const ACTION_MAX_TIME = 2000; // 2 秒完成一次循環
+const ACTION_MAX_TIME = 2000;
 
-// 角色核心數據
 let player = {
   name: "冒險者",
   level: 1,
@@ -46,15 +45,137 @@ let player = {
   lastOnline: Date.now()
 };
 
-// Canvas 自適應
 function resizeCanvas() {
-  canvas.width = canvas.parentElement.clientWidth;
-  canvas.height = canvas.parentElement.clientHeight;
+  if (canvas && canvas.parentElement) {
+    canvas.width = canvas.parentElement.clientWidth;
+    canvas.height = canvas.parentElement.clientHeight;
+  }
 }
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
-// UI 頁籤切換邏輯 (手機專用 Tab)
+// --- 顯示/隱藏錯誤與提示訊息 ---
+function showError(msg) {
+  const errEl = document.getElementById("auth-error");
+  if (errEl) errEl.innerText = msg;
+}
+
+// --- 自動登入機制 (只要登入過一次，之後開網頁自動免登入) ---
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    currentUid = user.uid;
+    console.log("已自動登入 UID:", currentUid);
+    
+    try {
+      // 載入玩家進度
+      const snap = await get(ref(db, `milky_users/${currentUid}`));
+      if (snap.exists()) {
+        Object.assign(player, snap.val());
+        calculateOfflineProgress(player.lastOnline);
+      } else {
+        const inputName = document.getElementById("nickname-input")?.value.trim();
+        player.name = inputName || user.displayName || "冒險者";
+        await set(ref(db, `milky_users/${currentUid}`), player);
+      }
+
+      // 隱藏登入 Modal，直接進入遊戲
+      const modal = document.getElementById("login-modal");
+      if (modal) modal.style.display = "none";
+      
+      updateUI();
+      requestAnimationFrame(gameLoop);
+    } catch (err) {
+      showError("資料載入失敗：" + err.message);
+    }
+  } else {
+    // 未登入時顯示彈窗
+    const modal = document.getElementById("login-modal");
+    if (modal) modal.style.display = "flex";
+  }
+});
+
+// --- 表單提交登入/註冊 (修復無反應問題) ---
+const authForm = document.getElementById("auth-form");
+if (authForm) {
+  authForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    showError("");
+    
+    const email = document.getElementById("email-input").value.trim();
+    const password = document.getElementById("password-input").value.trim();
+    const submitBtn = document.getElementById("submit-btn");
+
+    if (!email || !password) {
+      showError("請輸入 Email 與密碼！");
+      return;
+    }
+
+    if (password.length < 6) {
+      showError("密碼長度至少需要 6 位數！");
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerText = "驗證中...";
+    }
+
+    try {
+      // 1. 嘗試直接登入
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (err) {
+      // 2. 若帳號不存在，自動嘗試為新使用者註冊
+      if (
+        err.code === "auth/user-not-found" || 
+        err.code === "auth/invalid-credential"
+      ) {
+        try {
+          await createUserWithEmailAndPassword(auth, email, password);
+        } catch (createErr) {
+          showError(getFriendlyErrorMessage(createErr));
+        }
+      } else {
+        showError(getFriendlyErrorMessage(err));
+      }
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "開始冒險（登入 / 註冊）";
+      }
+    }
+  });
+}
+
+// 錯誤訊息轉化為中文
+function getFriendlyErrorMessage(err) {
+  if (err.code === "auth/invalid-email") return "Email 格式不正確！";
+  if (err.code === "auth/wrong-password") return "密碼錯誤，請重新輸入！";
+  if (err.code === "auth/email-already-in-use") return "此 Email 已被註冊，但密碼不正確！";
+  if (err.code === "auth/weak-password") return "密碼強度不足，請設定至少 6 位數。";
+  return "登入失敗：" + err.message;
+}
+
+// --- Google 轉址登入 ---
+getRedirectResult(auth).catch(err => showError(err.message));
+const provider = new GoogleAuthProvider();
+const googleBtn = document.getElementById("google-btn");
+if (googleBtn) {
+  googleBtn.addEventListener("click", () => {
+    signInWithRedirect(auth, provider);
+  });
+}
+
+// --- 登出 ---
+const logoutBtn = document.getElementById("logout-btn");
+if (logoutBtn) {
+  logoutBtn.addEventListener("click", async () => {
+    await saveData();
+    await signOut(auth);
+    window.location.reload();
+  });
+}
+
+// --- 遊戲頁籤與工作切換 ---
 document.querySelectorAll(".nav-btn").forEach(btn => {
   btn.addEventListener("click", (e) => {
     document.querySelectorAll(".nav-btn").forEach(b => b.classList.remove("active"));
@@ -62,11 +183,10 @@ document.querySelectorAll(".nav-btn").forEach(btn => {
     
     e.target.classList.add("active");
     const targetTab = e.target.getAttribute("data-tab");
-    document.getElementById(targetTab).classList.add("active");
+    document.getElementById(targetTab)?.classList.add("active");
   });
 });
 
-// 工作切換綁定
 document.querySelectorAll(".action-card").forEach(card => {
   card.addEventListener("click", () => {
     document.querySelectorAll(".action-card").forEach(c => c.classList.remove("active-work"));
@@ -84,7 +204,7 @@ function getActionName(act) {
   return "空閒";
 }
 
-// 鍛造與黑市交易綁定
+// --- 鍛造與交易 ---
 document.querySelectorAll(".craft-btn").forEach(btn => {
   btn.addEventListener("click", () => {
     const type = btn.getAttribute("data-craft");
@@ -106,7 +226,7 @@ document.querySelectorAll(".craft-btn").forEach(btn => {
   });
 });
 
-document.getElementById("sell-milk-btn").addEventListener("click", () => {
+document.getElementById("sell-milk-btn")?.addEventListener("click", () => {
   if (player.milk >= 10) {
     player.milk -= 10;
     player.gold += 20;
@@ -116,7 +236,7 @@ document.getElementById("sell-milk-btn").addEventListener("click", () => {
   }
 });
 
-document.getElementById("sell-wood-btn").addEventListener("click", () => {
+document.getElementById("sell-wood-btn")?.addEventListener("click", () => {
   if (player.wood >= 10) {
     player.wood -= 10;
     player.gold += 30;
@@ -126,15 +246,15 @@ document.getElementById("sell-wood-btn").addEventListener("click", () => {
   }
 });
 
-// 離線收益計算 (離線時間上限 12 小時)
+// --- 離線收益計算 ---
 function calculateOfflineProgress(lastTime) {
   const now = Date.now();
   const diffSec = Math.floor((now - lastTime) / 1000);
-  if (diffSec < 60) return; // 小於 1 分鐘忽略
+  if (diffSec < 60) return;
 
   const maxOfflineSec = 12 * 3600;
   const effectiveSec = Math.min(diffSec, maxOfflineSec);
-  const cycles = Math.floor(effectiveSec / 2); // 每 2 秒一次循環
+  const cycles = Math.floor(effectiveSec / 2);
 
   const hours = (effectiveSec / 3600).toFixed(1);
   let rewardText = "";
@@ -155,69 +275,27 @@ function calculateOfflineProgress(lastTime) {
     rewardText = `🪵 採集 ${woodEarned} 木材`;
   }
 
-  document.getElementById("offline-summary").innerText = `你離開了 ${hours} 小時，系統已為你進行自動掛機！`;
-  document.getElementById("offline-rewards").innerText = rewardText;
-  document.getElementById("offline-modal").classList.remove("hidden");
+  const summaryEl = document.getElementById("offline-summary");
+  const rewardEl = document.getElementById("offline-rewards");
+  const modalEl = document.getElementById("offline-modal");
+  
+  if (summaryEl) summaryEl.innerText = `你離開了 ${hours} 小時，系統已為你進行自動掛機！`;
+  if (rewardEl) rewardEl.innerText = rewardText;
+  if (modalEl) modalEl.classList.remove("hidden");
 }
 
-document.getElementById("claim-offline-btn").addEventListener("click", () => {
-  document.getElementById("offline-modal").classList.add("hidden");
+document.getElementById("claim-offline-btn")?.addEventListener("click", () => {
+  document.getElementById("offline-modal")?.classList.add("hidden");
   updateUI();
   saveData();
 });
 
-// Auth 監聽
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    currentUid = user.uid;
-    const snap = await get(ref(db, `milky_users/${currentUid}`));
-    if (snap.exists()) {
-      Object.assign(player, snap.val());
-      calculateOfflineProgress(player.lastOnline);
-    } else {
-      player.name = document.getElementById("nickname-input").value.trim() || user.displayName || "冒險者";
-      await set(ref(db, `milky_users/${currentUid}`), player);
-    }
-    document.getElementById("login-modal").style.display = "none";
-    updateUI();
-    requestAnimationFrame(gameLoop);
-  }
-});
-
-getRedirectResult(auth).catch(err => { document.getElementById("auth-error").innerText = err.message; });
-const provider = new GoogleAuthProvider();
-document.getElementById("google-btn").addEventListener("click", () => signInWithRedirect(auth, provider));
-
-document.getElementById("auth-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const email = document.getElementById("email-input").value;
-  const password = document.getElementById("password-input").value;
-  try {
-    await signInWithEmailAndPassword(auth, email, password);
-  } catch (err) {
-    if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") {
-      try { await createUserWithEmailAndPassword(auth, email, password); } 
-      catch (cErr) { document.getElementById("auth-error").innerText = cErr.message; }
-    } else {
-      document.getElementById("auth-error").innerText = err.message;
-    }
-  }
-});
-
-document.getElementById("logout-btn").addEventListener("click", async () => {
-  await saveData();
-  await signOut(auth);
-  window.location.reload();
-});
-
-// 資料保存
 async function saveData() {
   if (!currentUid) return;
   player.lastOnline = Date.now();
   await update(ref(db, `milky_users/${currentUid}`), player);
 }
 
-// UI 畫面刷新
 function updateUI() {
   document.getElementById("player-name").innerText = player.name;
   document.getElementById("player-level").innerText = `Lv.${player.level}`;
@@ -226,24 +304,26 @@ function updateUI() {
   document.getElementById("wood-val").innerText = player.wood;
   document.getElementById("eq-weapon").innerText = player.weaponName;
 
-  // 更新背包格
   const invGrid = document.getElementById("inventory-grid");
-  invGrid.innerHTML = `
-    <div class="inv-item">🥛 牛奶<span class="count">${player.milk}</span></div>
-    <div class="inv-item">🪵 木材<span class="count">${player.wood}</span></div>
-    <div class="inv-item">🧀 起司<span class="count">${player.cheese}</span></div>
-  `;
+  if (invGrid) {
+    invGrid.innerHTML = `
+      <div class="inv-item">🥛 牛奶<span class="count">${player.milk}</span></div>
+      <div class="inv-item">🪵 木材<span class="count">${player.wood}</span></div>
+      <div class="inv-item">🧀 起司<span class="count">${player.cheese}</span></div>
+    `;
+  }
 }
 
 function addLog(msg) {
   const box = document.getElementById("log-box");
+  if (!box) return;
   const div = document.createElement("div");
   div.innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
   box.appendChild(div);
   box.scrollTop = box.scrollHeight;
 }
 
-// 核心循環：更新與渲染
+// --- 遊戲繪製與主循環 ---
 let lastTime = performance.now();
 
 function gameLoop(now) {
@@ -256,10 +336,12 @@ function gameLoop(now) {
     executeAction();
   }
 
-  // 更新進度條
   const pct = Math.min(100, (actionTimer / ACTION_MAX_TIME) * 100);
-  document.getElementById("action-progress-fill").style.width = `${pct}%`;
-  document.getElementById("current-action-text").innerText = `⚡ 當前工作：${getActionName(currentAction)}`;
+  const fillEl = document.getElementById("action-progress-fill");
+  const textEl = document.getElementById("current-action-text");
+  
+  if (fillEl) fillEl.style.width = `${pct}%`;
+  if (textEl) textEl.innerText = `⚡ 當前工作：${getActionName(currentAction)}`;
 
   renderCanvas();
   requestAnimationFrame(gameLoop);
@@ -291,11 +373,11 @@ function executeAction() {
 }
 
 function renderCanvas() {
+  if (!canvas) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const cx = canvas.width / 2;
   const cy = canvas.height / 2;
 
-  // 根據工作繪製不同主題動畫
   if (currentAction === "combat") {
     ctx.fillStyle = "#ef4444";
     ctx.beginPath();
