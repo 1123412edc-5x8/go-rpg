@@ -1,21 +1,22 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { 
-  getAuth, signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, onAuthStateChanged, signOut 
+  getAuth, signInWithRedirect, GoogleAuthProvider, getRedirectResult,
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { 
   getDatabase, ref, set, get, onValue, onDisconnect, remove, push, update, runTransaction 
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-// 請替換為你的 Firebase Config
+// ⚠️ 請替換為你自己的 Firebase Config 專案設定資訊！
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyCMDqo_WjGtGevTHcu4VFgcngyge66hJ60",
+    authDomain: "go-rpg-game.firebaseapp.com",
+    databaseURL: "https://go-rpg-game-default-rtdb.firebaseio.com",
+    projectId: "go-rpg-game",
+    storageBucket: "go-rpg-game.firebasestorage.app",
+    messagingSenderId: "903016119451",
+    appId: "1:903016119451:web:6e90207567f5ca27e99a3e",
+    measurementId: "G-RDK6HNMW9Z"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -29,7 +30,6 @@ let currentUid = null;
 let selectedItemToSell = null;
 let players = {};
 let monster = null;
-const keysPressed = {};
 const MOVE_SPEED = 4;
 
 let myData = {
@@ -55,7 +55,7 @@ function resizeCanvas() {
 window.addEventListener("resize", resizeCanvas);
 resizeCanvas();
 
-// 面板按鈕綁定 (防止作用域問題)
+// 面板控制綁定
 document.getElementById("tab-inventory-btn").addEventListener("click", () => {
   document.getElementById("inventory-panel").classList.toggle("hidden");
   document.getElementById("market-panel").classList.add("hidden");
@@ -74,7 +74,12 @@ document.getElementById("close-market-btn").addEventListener("click", () => {
   document.getElementById("market-panel").classList.add("hidden");
 });
 
-// Auth 監聽
+// Google 轉址登入結果檢查
+getRedirectResult(auth).catch(err => {
+  document.getElementById("auth-error").innerText = "Google 登入失敗: " + err.message;
+});
+
+// Auth 身份監聽
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUid = user.uid;
@@ -94,21 +99,42 @@ onAuthStateChanged(auth, async (user) => {
   }
 });
 
-// Email / Google 登入
-document.getElementById("google-btn").addEventListener("click", () => signInWithPopup(auth, new GoogleAuthProvider()));
+// 1. Google 轉址登入 (防手機封鎖 Popup)
+const provider = new GoogleAuthProvider();
+document.getElementById("google-btn").addEventListener("click", () => {
+  signInWithRedirect(auth, provider);
+});
+
+// 2. Email 登入/自動註冊
 document.getElementById("auth-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   const email = document.getElementById("email-input").value;
   const password = document.getElementById("password-input").value;
+  const errorEl = document.getElementById("auth-error");
+  errorEl.innerText = "";
+
+  if (password.length < 6) {
+    errorEl.innerText = "密碼長度至少需要 6 位數！";
+    return;
+  }
+
   try {
     await signInWithEmailAndPassword(auth, email, password);
   } catch (err) {
+    // 帳號不存在則自動進行註冊
     if (err.code === "auth/user-not-found" || err.code === "auth/invalid-credential") {
-      await createUserWithEmailAndPassword(auth, email, password);
+      try {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } catch (createErr) {
+        errorEl.innerText = "註冊失敗: " + createErr.message;
+      }
+    } else {
+      errorEl.innerText = "登入失敗: " + err.message;
     }
   }
 });
 
+// 登出
 document.getElementById("logout-btn").addEventListener("click", async () => {
   if (currentUid) await remove(ref(db, `players/${currentUid}`));
   await signOut(auth);
@@ -157,6 +183,7 @@ function renderInventory() {
   });
 }
 
+// 物品上架
 document.getElementById("confirm-sell-btn").addEventListener("click", async () => {
   const price = parseInt(document.getElementById("sell-price-input").value);
   if (!selectedItemToSell || isNaN(price) || price <= 0) return alert("請輸入售價！");
@@ -176,6 +203,7 @@ document.getElementById("confirm-sell-btn").addEventListener("click", async () =
   renderInventory();
 });
 
+// 監聽拍賣場
 function listenToMarket() {
   onValue(ref(db, "market"), (snapshot) => {
     const list = document.getElementById("market-list");
