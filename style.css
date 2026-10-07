@@ -32,7 +32,7 @@ canvas {
   z-index: 1;
 }
 
-/* 核心隱藏規則 */
+/* 強制隱藏 (修復面板硬擠問題) */
 .hidden {
   display: none !important;
 }
@@ -85,7 +85,7 @@ canvas {
 .auth-btn.submit { background: #ff9800; color: white; }
 
 .divider { margin: 10px 0; font-size: 12px; color: #888; }
-.error-msg { color: #ff5252; font-size: 12px; margin-top: 8px; }
+.error-msg { color: #ff5252; font-size: 12px; margin-top: 8px; word-break: break-all; }
 
 /* 頂部玩家資訊列 */
 #user-bar {
