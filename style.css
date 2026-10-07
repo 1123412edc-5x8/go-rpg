@@ -1,9 +1,127 @@
-/* 遊戲面板頁首 */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #1a1a1a;
+  font-family: Arial, sans-serif;
+  color: #ffffff;
+}
+
+#game-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: #2e7d32;
+}
+
+/* 強制隱藏標籤 (解決面板通通擠在畫面上的問題) */
+.hidden {
+  display: none !important;
+}
+
+/* Modal 登入視窗 */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 999;
+}
+
+.modal-content {
+  background: #222;
+  padding: 25px;
+  border-radius: 12px;
+  text-align: center;
+  color: white;
+  width: 300px;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.modal-content h2 { margin-bottom: 15px; }
+.modal-content input {
+  padding: 8px;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid #444;
+  margin-bottom: 10px;
+  width: 100%;
+  background: #333;
+  color: white;
+}
+
+.auth-btn {
+  width: 100%;
+  padding: 10px;
+  font-size: 14px;
+  font-weight: bold;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+.auth-btn.google { background: #4285F4; color: white; }
+.auth-btn.submit { background: #ff9800; color: white; }
+
+/* 右上角切換選單 */
+#side-menu-tabs {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 8px;
+  z-index: 50;
+}
+
+#side-menu-tabs button {
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: 1px solid #666;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+/* 浮動遊戲面板 (背包 / 交易所) */
+.game-panel {
+  position: absolute;
+  top: 50px;
+  right: 10px;
+  width: 280px;
+  background: rgba(30, 30, 30, 0.95);
+  border: 1px solid #555;
+  border-radius: 8px;
+  padding: 12px;
+  z-index: 100;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .close-btn {
@@ -13,49 +131,42 @@
   font-size: 16px;
   cursor: pointer;
 }
-.close-btn:hover { color: white; }
 
-/* 道具格子網格 */
+/* 道具卡片與格子 */
 .item-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  max-height: 180px;
+  gap: 6px;
+  max-height: 150px;
   overflow-y: auto;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .item-card {
-  background: #2a2a2a;
-  border: 1px solid #444;
-  border-radius: 6px;
-  padding: 8px;
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 6px;
   text-align: center;
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
-  transition: background 0.2s;
-}
-
-.item-card:hover {
-  background: #3a3a3a;
-  border-color: #f1c40f;
 }
 
 /* 上架輸入框區塊 */
 .sell-box {
   margin-top: 10px;
-  background: #1e1e1e;
-  padding: 10px;
+  background: #252525;
+  padding: 8px;
   border-radius: 6px;
   border: 1px dashed #f1c40f;
 }
 
 .sell-box input {
   width: 100%;
-  padding: 6px;
-  margin: 6px 0;
+  padding: 5px;
+  margin: 5px 0;
   border-radius: 4px;
-  border: 1px solid #444;
+  border: 1px solid #555;
   background: #333;
   color: white;
 }
@@ -67,42 +178,95 @@
   border-radius: 4px;
   font-weight: bold;
   cursor: pointer;
+  font-size: 12px;
 }
 .action-btn-sm.green { background: #2ecc71; color: white; }
 .action-btn-sm.blue { background: #3498db; color: white; }
 
-/* 拍賣行商品清單 */
+/* 拍賣行清單 */
 .market-list {
-  max-height: 250px;
+  max-height: 220px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .market-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #282828;
-  padding: 8px 12px;
-  border-radius: 6px;
-  border-left: 4px solid #f1c40f;
+  background: #2a2a2a;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border-left: 3px solid #f1c40f;
 }
 
 .market-item-info {
   display: flex;
   flex-direction: column;
-  font-size: 12px;
-}
-
-.market-item-info .seller {
-  font-size: 10px;
-  color: #888;
+  font-size: 11px;
 }
 
 .market-item-price {
   color: #f1c40f;
   font-weight: bold;
+  font-size: 12px;
+}
+
+/* 手機操作按鈕 */
+#touch-ui {
+  position: absolute;
+  bottom: 80px;
+  right: 20px;
+  z-index: 50;
+}
+
+.action-btn {
+  width: 65px;
+  height: 65px;
+  border-radius: 50%;
+  background: rgba(231, 76, 60, 0.9);
+  color: white;
   font-size: 13px;
+  font-weight: bold;
+  border: 2px solid #ffffff;
+  cursor: pointer;
+}
+
+/* 聊天室面板 */
+#chat-container {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  width: 260px;
+  height: 140px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  z-index: 50;
+}
+
+#chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 11px;
+  color: white;
+}
+
+#chat-form { display: flex; }
+#chat-input {
+  flex: 1;
+  padding: 4px;
+  border: none;
+  border-radius: 4px 0 0 4px;
+}
+#chat-form button {
+  background: #2196F3;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 0 4px 4px 0;
 }
