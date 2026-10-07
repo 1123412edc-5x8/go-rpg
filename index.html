@@ -2,82 +2,61 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>HTML5 多人線上 RPG 遊戲</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>超肝自動掛機 RPG</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- 1. 創角/登入 Modal -->
+  <!-- 登入/創角 Modal -->
   <div id="login-modal" class="modal">
     <div class="modal-content">
-      <h2>登入 RPG 世界</h2>
+      <h2>進入掛機世界</h2>
       <button id="google-btn" class="auth-btn google">🌐 使用 Google 帳號登入</button>
-      <div class="divider">或使用 Email</div>
       <form id="auth-form">
-        <input type="email" id="email-input" placeholder="電子郵件 Email" required>
+        <input type="email" id="email-input" placeholder="Email" required>
         <input type="password" id="password-input" placeholder="密碼 (至少6碼)" minlength="6" required>
         <input type="text" id="nickname-input" placeholder="角色暱稱" maxlength="10" required>
-        <button type="submit" id="submit-auth-btn" class="auth-btn submit">登入 / 註冊</button>
+        <button type="submit" class="auth-btn submit">開始掛機</button>
       </form>
       <p id="auth-error" class="error-msg"></p>
     </div>
   </div>
 
-  <!-- 2. 遊戲主要容器 -->
+  <!-- 遊戲主畫面 -->
   <div id="game-container">
     <canvas id="gameCanvas"></canvas>
 
     <!-- 頂部狀態列 -->
-    <div id="user-bar">
-      <span id="user-info">玩家: -- | 💰 0</span>
-      <button id="logout-btn">登出</button>
-    </div>
-
-    <!-- 右上角選單按鈕 -->
-    <div id="side-menu-tabs">
-      <button id="tab-inventory-btn">🎒 背包</button>
-      <button id="tab-market-btn">⚖️ 交易所</button>
-    </div>
-
-    <!-- 背包面板 -->
-    <div id="inventory-panel" class="game-panel hidden">
-      <div class="panel-header">
-        <h3>🎒 玩家背包</h3>
-        <button class="close-btn" id="close-inventory-btn">✕</button>
+    <div id="top-bar">
+      <div class="stat-group">
+        <span id="player-info">冒險者 [Lv.1]</span>
+        <span id="player-stats">⚔️ 攻擊力: 0 | 🩸 生命值: 0</span>
       </div>
-      <p id="player-gold-display">💰 當前金幣: 0</p>
-      <hr style="border-color: #444; margin: 8px 0;">
-      <div id="inventory-list" class="item-grid"></div>
-      
-      <div id="sell-box" class="sell-box hidden">
-        <p>上架道具: <strong id="sell-item-name">--</strong></p>
-        <input type="number" id="sell-price-input" placeholder="請設定售價 (金幣)" min="1">
-        <button id="confirm-sell-btn" class="action-btn-sm green">確認上架</button>
+      <div class="bar-container">
+        <div class="bar exp-bar"><div id="exp-fill"></div><span>EXP</span></div>
       </div>
     </div>
 
-    <!-- 交易所面板 -->
-    <div id="market-panel" class="game-panel hidden">
-      <div class="panel-header">
-        <h3>⚖️ 全服拍賣行</h3>
-        <button class="close-btn" id="close-market-btn">✕</button>
-      </div>
-      <div id="market-list" class="market-list"></div>
+    <!-- 左側面板：掛機日誌與資訊 -->
+    <div id="left-panel">
+      <h3>📜 掛機日誌</h3>
+      <div id="log-messages"></div>
     </div>
 
-    <!-- 手機攻擊按鈕 -->
-    <div id="touch-ui">
-      <button id="attack-btn" class="action-btn">⚔️ 攻擊</button>
+    <!-- 右側面板：裝備欄與背包 -->
+    <div id="right-panel">
+      <h3>🎒 當前裝備</h3>
+      <div class="gear-slot" id="weapon-slot">武器: 無</div>
+      <div class="gear-slot" id="armor-slot">防具: 無</div>
+      <button id="upgrade-btn" class="action-btn">強化攻擊力 (+10)</button>
+      <button id="logout-btn" class="danger-btn">登出</button>
     </div>
-
-    <!-- 聊天室 -->
-    <div id="chat-container">
-      <div id="chat-messages"></div>
-      <form id="chat-form">
-        <input type="text" id="chat-input" placeholder="發送訊息..." autocomplete="off">
-        <button type="submit">發送</button>
-      </form>
+    
+    <!-- 底部功能列 -->
+    <div id="bottom-bar">
+      <span id="player-gold">💰 金幣: 0</span>
+      <span id="current-stage">🗺️ 關卡: 第 1 層</span>
     </div>
   </div>
 
