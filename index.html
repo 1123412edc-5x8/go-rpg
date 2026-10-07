@@ -16,7 +16,7 @@
       <div class="divider">或使用 Email</div>
       <form id="auth-form">
         <input type="email" id="email-input" placeholder="電子郵件 Email" required>
-        <input type="password" id="password-input" placeholder="密碼" required>
+        <input type="password" id="password-input" placeholder="密碼 (至少6碼)" minlength="6" required>
         <input type="text" id="nickname-input" placeholder="角色暱稱" maxlength="10" required>
         <button type="submit" id="submit-auth-btn" class="auth-btn submit">登入 / 註冊</button>
       </form>
@@ -40,7 +40,7 @@
       <button id="tab-market-btn">⚖️ 交易所</button>
     </div>
 
-    <!-- 背包面板 (預設隱藏 hidden) -->
+    <!-- 背包面板 -->
     <div id="inventory-panel" class="game-panel hidden">
       <div class="panel-header">
         <h3>🎒 玩家背包</h3>
@@ -52,12 +52,12 @@
       
       <div id="sell-box" class="sell-box hidden">
         <p>上架道具: <strong id="sell-item-name">--</strong></p>
-        <input type="number" id="sell-price-input" placeholder="售價" min="1">
+        <input type="number" id="sell-price-input" placeholder="請設定售價 (金幣)" min="1">
         <button id="confirm-sell-btn" class="action-btn-sm green">確認上架</button>
       </div>
     </div>
 
-    <!-- 交易所面板 (預設隱藏 hidden) -->
+    <!-- 交易所面板 -->
     <div id="market-panel" class="game-panel hidden">
       <div class="panel-header">
         <h3>⚖️ 全服拍賣行</h3>
