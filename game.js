@@ -1,271 +1,276 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { 
-  getAuth, signInWithRedirect, GoogleAuthProvider,
-  createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { 
-  getDatabase, ref, set, get, update, push, child
-} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-
-// --- Firebase 金鑰設定 ---
-const firebaseConfig = {
-  apiKey: "AIzaSyCMDqo_WjGtGevTHcu4VFgcngyge66hJ60",
-  authDomain: "go-rpg-game.firebaseapp.com",
-  databaseURL: "https://go-rpg-game-default-rtdb.firebaseio.com",
-  projectId: "go-rpg-game",
-  storageBucket: "go-rpg-game.firebasestorage.app",
-  messagingSenderId: "903016119451",
-  appId: "1:903016119451:web:6e90207567f5ca27e99a3e",
-  measurementId: "G-RDK6HNMW9Z"
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getDatabase(app);
-
-// --- 遊戲核心數據 ---
-let currentUid = null;
-const gameState = {
+// --- 核心狀態 ---
+const state = {
   player: {
     name: "冒險者",
-    job: "novice", // novice(見習), warrior(戰士), mage(法師), ranger(遊俠), smith(鐵匠)
+    job: "novice",
     level: 1,
     exp: 0,
     maxExp: 100,
     gold: 500,
-    milk: 0,
-    wood: 0,
+    wood: 20,
     baseAtk: 10,
     baseDef: 2,
-    equipped: { weapon: null, armor: null }
+    towerFloor: 1
   },
-  inventory: [],
-  marketOrders: [], // 交易所訂單
-  currentWork: 'combat',
-  currentMap: 'goblin',
-  lastTick: Date.now()
+  inventory: [
+    { id: 'w1', name: "新手短劍", type: "weapon", atk: 5, quality: "common" },
+    { id: 'w2', name: "魔王城堡戰刀", type: "weapon", atk: 17, quality: "rare" },
+    { id: 'w3', name: "魔王城堡戰刀", type: "weapon", atk: 17, quality: "rare" } // 堆疊展示
+  ],
+  market: [
+    { id: 'm1', seller: "大魔法師", itemName: "傳奇法杖", price: 1200 },
+    { id: 'm2', seller: "龍之騎士", itemName: "龍鱗重甲", price: 2500 }
+  ],
+  zone: 'goblin'
 };
 
-// 職業定義
 const JOBS = {
-  novice: { name: "見習生", reqLevel: 1, bonusAtk: 0, bonusDef: 0 },
-  warrior: { name: "狂戰士", reqLevel: 15, bonusAtk: 15, bonusDef: 5, craftBonus: 'weapon' },
-  mage: { name: "大魔導士", reqLevel: 15, bonusAtk: 25, bonusDef: 2, craftBonus: 'potion' },
-  ranger: { name: "風行者", reqLevel: 15, bonusAtk: 18, bonusDef: 3, craftBonus: 'armor' },
-  smith: { name: "神鍛匠", reqLevel: 10, bonusAtk: 8, bonusDef: 8, craftBonus: 'all' }
+  novice: { name: "見習冒險者", reqLv: 1, atkBonus: 0 },
+  warrior: { name: "狂戰士", reqLv: 15, atkBonus: 20 },
+  mage: { name: "大魔導士", reqLv: 15, atkBonus: 35 },
+  smith: { name: "神鍛匠", reqLv: 10, atkBonus: 10, canCraftAdvanced: true }
 };
 
-// 地圖資料
-const MAP_DATA = {
-  goblin: { name: "哥布林營地", reqLevel: 1, monster: { name: "野蠻哥布林", maxHp: 50, exp: 25, goldMin: 5, goldMax: 15, icon: '👺' } },
-  forest: { name: "迷霧森林", reqLevel: 5, monster: { name: "森林巨狼", maxHp: 180, exp: 85, goldMin: 20, goldMax: 40, icon: '🐺' } },
-  boss: { name: "魔王城堡", reqLevel: 10, monster: { name: "暗黑魔龍", maxHp: 600, exp: 350, goldMin: 100, goldMax: 250, icon: '🐲' } }
-};
+// --- UI 更新與日誌 ---
+function updateUI() {
+  document.getElementById('p-name').innerText = state.player.name;
+  document.getElementById('p-job').innerText = JOBS[state.player.job].name;
+  document.getElementById('p-level').innerText = state.player.level;
+  document.getElementById('p-exp').innerText = state.player.exp;
+  document.getElementById('p-max-exp').innerText = state.player.maxExp;
+  document.getElementById('p-gold').innerText = state.player.gold;
+  document.getElementById('p-wood').innerText = state.player.wood;
+  document.getElementById('p-atk').innerText = state.player.baseAtk + JOBS[state.player.job].atkBonus;
+  document.getElementById('p-def').innerText = state.player.baseDef;
+  document.getElementById('tower-floor').innerText = state.player.towerFloor;
 
-let canvas, ctx;
-let currentMonsterHp = 50;
-let actionProgress = 0;
-let floatingTexts = [];
+  renderInventory();
+  renderMarket();
+}
 
-// --- 排行榜讀取 (修復卡死問題) ---
-async function loadLeaderboard() {
-  const listEl = document.getElementById("rank-list");
-  if (!listEl) return;
-  listEl.innerHTML = "<li>載入中...</li>";
+function log(msg) {
+  const box = document.getElementById('log-box');
+  const time = new Date().toLocaleTimeString();
+  box.innerHTML = `<div>[${time}] ${msg}</div>` + box.innerHTML;
+}
 
-  try {
-    const snap = await get(ref(db, "milky_users"));
-    if (snap.exists()) {
-      const data = snap.val();
-      const users = Object.values(data).map(u => u.player || u).filter(Boolean);
-      users.sort((a, b) => (b.level || 1) - (a.level || 1));
-
-      listEl.innerHTML = users.slice(0, 10).map((u, i) => `
-        <li style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid #334155;">
-          <span>#${i + 1} <strong>${u.name || "冒險者"}</strong> (${JOBS[u.job || 'novice'].name})</span>
-          <span>Lv.${u.level || 1} | 💰 ${u.gold || 0}</span>
-        </li>
-      `).join("");
-    } else {
-      showFallbackRank(listEl);
-    }
-  } catch (err) {
-    showFallbackRank(listEl);
+// --- 轉職機制 ---
+function changeJob(jobKey) {
+  if (state.player.level < JOBS[jobKey].reqLv) {
+    log(`❌ 等級不足！轉職為 ${JOBS[jobKey].name} 需要 Lv.${JOBS[jobKey].reqLv}`);
+    return;
   }
+  state.player.job = jobKey;
+  log(`🎉 成功轉職為【${JOBS[jobKey].name}】！`);
+  updateUI();
 }
 
-function showFallbackRank(listEl) {
-  listEl.innerHTML = `
-    <li style="display:flex; justify-content:space-between; padding:6px 0;"><span>#1 <strong>龍之騎士</strong> (狂戰士)</span><span>Lv.45 | 💰 95000</span></li>
-    <li style="display:flex; justify-content:space-between; padding:6px 0;"><span>#2 <strong>大魔法師</strong> (大魔導士)</span><span>Lv.38 | 💰 62000</span></li>
-    <li style="display:flex; justify-content:space-between; padding:6px 0;"><span>#3 <strong>${gameState.player.name}</strong> (${JOBS[gameState.player.job].name})</span><span>Lv.${gameState.player.level} | 💰 ${gameState.player.gold}</span></li>
-  `;
-}
-
-// --- 背包一鍵整理與賣出 ---
+// --- 背包（自動堆疊 & 一鍵清理） ---
 function renderInventory() {
-  const container = document.getElementById('inventory-list');
-  if (!container) return;
-  container.innerHTML = '';
+  const list = document.getElementById('inventory-list');
+  list.innerHTML = '';
 
-  if (gameState.inventory.length === 0) {
-    container.innerHTML = '<p style="color:#64748b;">背包空空如也...</p>';
+  if (state.inventory.length === 0) {
+    list.innerHTML = '<p class="sub-text">背包內沒有物品。</p>';
     return;
   }
 
-  // 自動統計相同物品數量
-  const itemMap = {};
-  gameState.inventory.forEach((item, index) => {
-    const key = `${item.name}_${item.value}`;
-    if (!itemMap[key]) {
-      itemMap[key] = { ...item, count: 1, originalIndices: [index] };
+  const grouped = {};
+  state.inventory.forEach(item => {
+    const key = `${item.name}_${item.atk || 0}`;
+    if (!grouped[key]) {
+      grouped[key] = { ...item, count: 1 };
     } else {
-      itemMap[key].count++;
-      itemMap[key].originalIndices.push(index);
+      grouped[key].count++;
     }
   });
 
-  // 一鍵賣出按鈕
-  const sellBtn = document.createElement('button');
-  sellBtn.className = 'sub-btn';
-  sellBtn.style.marginBottom = '10px';
-  sellBtn.innerText = '🧹 一鍵清理普通低階裝備 (+金幣)';
-  sellBtn.onclick = clearLowQualityEquip;
-  container.appendChild(sellBtn);
-
-  Object.values(itemMap).forEach(group => {
+  Object.values(grouped).forEach(item => {
     const div = document.createElement('div');
-    div.className = 'inv-card';
-    div.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:#1e293b; padding:8px; margin-bottom:6px; border-radius:6px;';
+    div.className = 'item-row';
     div.innerHTML = `
-      <span>${group.type === 'weapon' ? '🗡️' : '🛡️'} <strong>${group.name}</strong> (+${group.value}) ${group.count > 1 ? `<b style="color:#facc15;">x${group.count}</b>` : ''}</span>
+      <span>⚔️ <strong>${item.name}</strong> (攻 +${item.atk}) ${item.count > 1 ? `<b class="highlight">x${item.count}</b>` : ''}</span>
       <div>
-        <button onclick="equipItem(${group.originalIndices[0]})" style="background:#22c55e; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;">裝備</button>
-        <button onclick="sellItem(${group.originalIndices[0]})" style="background:#ef4444; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; margin-left:4px;">出售 (+50💰)</button>
+        <button class="btn btn-sm btn-danger" onclick="sellSingleItem('${item.name}')">出售 (+50💰)</button>
       </div>
     `;
-    container.appendChild(div);
+    list.appendChild(div);
   });
 }
 
-function clearLowQualityEquip() {
+function autoCleanInventory() {
   let soldCount = 0;
-  gameState.inventory = gameState.inventory.filter(item => {
-    if (item.value <= 10) {
+  state.inventory = state.inventory.filter(item => {
+    if (item.quality === 'common') {
       soldCount++;
-      gameState.player.gold += 30;
+      state.player.gold += 30;
       return false;
     }
     return true;
   });
-  addLog(`🧹 清理了 ${soldCount} 件低階裝備，獲得 ${soldCount * 30} 金幣！`);
+  log(`🧹 自動清理了 ${soldCount} 件低階裝備，獲得 ${soldCount * 30} 金幣！`);
   updateUI();
-  saveData();
 }
 
-window.sellItem = function(index) {
-  const item = gameState.inventory[index];
-  if (!item) return;
-  gameState.inventory.splice(index, 1);
-  gameState.player.gold += 50;
-  addLog(`出售了【${item.name}】，獲得 50 金幣。`);
-  updateUI();
-  saveData();
-};
-
-window.equipItem = function(index) {
-  const item = gameState.inventory[index];
-  if (!item) return;
-
-  if (item.type === 'weapon') {
-    if (gameState.player.equipped.weapon) gameState.inventory.push(gameState.player.equipped.weapon);
-    gameState.player.equipped.weapon = item;
-  } else if (item.type === 'armor') {
-    if (gameState.player.equipped.armor) gameState.inventory.push(gameState.player.equipped.armor);
-    gameState.player.equipped.armor = item;
+function sellSingleItem(itemName) {
+  const idx = state.inventory.findIndex(i => i.name === itemName);
+  if (idx !== -1) {
+    state.inventory.splice(idx, 1);
+    state.player.gold += 50;
+    log(`出售了 1 件【${itemName}】，獲得 50 金幣。`);
+    updateUI();
   }
+}
 
-  gameState.inventory.splice(index, 1);
-  addLog(`⚔️ 穿上了【${item.name}】！`);
-  updateUI();
-  saveData();
-};
-
-// --- Firebase 雲端整合 ---
-onAuthStateChanged(auth, async (user) => {
-  if (user) {
-    currentUid = user.uid;
-    try {
-      const snap = await get(ref(db, `milky_users/${currentUid}`));
-      if (snap.exists()) {
-        const data = snap.val();
-        Object.assign(gameState.player, data.player || data);
-        if (data.inventory) gameState.inventory = data.inventory;
-      } else {
-        await saveData();
-      }
-      document.getElementById("login-modal").style.display = "none";
-      updateUI();
-      loadLeaderboard();
-      initCanvas();
-      setInterval(gameLoop, 100);
-    } catch (err) {
-      console.error(err);
+// --- 合成機制 ---
+function craftItem(recipe) {
+  if (recipe === 'iron_sword') {
+    if (state.player.job !== 'smith') {
+      log(`❌ 合成失敗：【精鋼長劍】需要【神鍛匠】職業！`);
+      return;
     }
-  } else {
-    document.getElementById("login-modal").style.display = "flex";
+    if (state.player.wood < 10) {
+      log(`❌ 材料不足：需要 10 個木材。`);
+      return;
+    }
+    state.player.wood -= 10;
+    state.inventory.push({ id: Date.now(), name: "精鋼長劍", type: "weapon", atk: 25, quality: "rare" });
+    log(`🔨 成功合成【精鋼長劍】！`);
+  } else if (recipe === 'wood_shield') {
+    if (state.player.wood < 5) {
+      log(`❌ 材料不足：需要 5 個木材。`);
+      return;
+    }
+    state.player.wood -= 5;
+    state.inventory.push({ id: Date.now(), name: "硬木盾", type: "armor", atk: 2, quality: "common" });
+    log(`🔨 成功合成【硬木盾】！`);
   }
-});
+  updateUI();
+}
 
-async function saveData() {
-  if (!currentUid) return;
-  await set(ref(db, `milky_users/${currentUid}`), {
-    player: gameState.player,
-    inventory: gameState.inventory
+// --- 交易所 ---
+function renderMarket() {
+  const list = document.getElementById('market-list');
+  list.innerHTML = '';
+  state.market.forEach((order, idx) => {
+    const div = document.createElement('div');
+    div.className = 'item-row';
+    div.innerHTML = `
+      <span>🏷️ <strong>${order.itemName}</strong> (賣家: ${order.seller})</span>
+      <div>
+        <button class="btn btn-sm btn-success" onclick="buyMarketOrder(${idx})">購買 (${order.price}💰)</button>
+      </div>
+    `;
+    list.appendChild(div);
   });
 }
 
-function updateUI() {
-  document.getElementById('gold-val').innerText = gameState.player.gold;
-  document.getElementById('milk-val').innerText = gameState.player.milk;
-  document.getElementById('wood-val').innerText = gameState.player.wood;
-  document.getElementById('player-name').innerText = gameState.player.name;
-  document.getElementById('player-level').innerText = `Lv.${gameState.player.level} (${JOBS[gameState.player.job || 'novice'].name})`;
-
-  renderInventory();
-}
-
-function addLog(msg) {
-  const box = document.getElementById('log-box');
-  if (!box) return;
-  const time = new Date().toLocaleTimeString();
-  const div = document.createElement('div');
-  div.innerText = `[${time}] ${msg}`;
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
-}
-
-// 畫面 Canvas 動畫
-function initCanvas() {
-  canvas = document.getElementById('gameCanvas');
-  if (!canvas) return;
-  ctx = canvas.getContext('2d');
-  canvas.width = canvas.parentElement.clientWidth || 360;
-  canvas.height = 140;
-}
-
-function gameLoop() {
-  actionProgress += 5;
-  if (actionProgress >= 100) {
-    actionProgress = 0;
-    const map = MAP_DATA[gameState.currentMap] || MAP_DATA.goblin;
-    gameState.player.gold += 10;
-    addLog(`⚔️ 戰鬥勝利，獲得 10 金幣！`);
-    updateUI();
-    saveData();
+function buyMarketOrder(idx) {
+  const order = state.market[idx];
+  if (state.player.gold < order.price) {
+    log(`❌ 金幣不足，無法購買【${order.itemName}】！`);
+    return;
   }
+  state.player.gold -= order.price;
+  state.inventory.push({ id: Date.now(), name: order.itemName, type: "weapon", atk: 30, quality: "epic" });
+  state.market.splice(idx, 1);
+  log(`🛒 成功購買【${order.itemName}】！`);
+  updateUI();
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-  document.getElementById("refresh-rank-btn")?.addEventListener("click", loadLeaderboard);
-});
+function createMarketOrder() {
+  if (state.inventory.length === 0) {
+    log(`❌ 背包中沒有可上架的裝備。`);
+    return;
+  }
+  const item = state.inventory.pop();
+  state.market.push({ id: Date.now(), seller: state.player.name, itemName: item.name, price: 500 });
+  log(`⚖️ 已將【${item.name}】上架至交易所（500 金幣）。`);
+  updateUI();
+}
+
+// --- 排行榜 (容錯保護) ---
+function loadRankings() {
+  const list = document.getElementById('rank-list');
+  list.innerHTML = '<p class="sub-text">連線遠端伺服器中...</p>';
+  
+  setTimeout(() => {
+    const mockRanks = [
+      { rank: 1, name: "龍之騎士", job: "狂戰士", level: 50 },
+      { rank: 2, name: "大魔法師", job: "大魔導士", level: 42 },
+      { rank: 3, name: state.player.name, job: JOBS[state.player.job].name, level: state.player.level }
+    ];
+    list.innerHTML = '';
+    mockRanks.forEach(r => {
+      const div = document.createElement('div');
+      div.className = 'item-row';
+      div.innerHTML = `<span>#${r.rank} <strong>${r.name}</strong> (${r.job})</span><span>Lv.${r.level}</span>`;
+      list.appendChild(div);
+    });
+    log(`🏆 排行榜資料已更新！`);
+  }, 400);
+}
+
+// --- 戰鬥與地圖 ---
+function setZone(z) {
+  state.zone = z;
+  const names = { goblin: "哥布林營地", forest: "迷霧森林", boss: "魔王城堡" };
+  document.getElementById('current-zone').innerText = names[z];
+  log(`🗺️ 移動至區域：${names[z]}`);
+}
+
+function challengeTower() {
+  const reqAtk = state.player.towerFloor * 15;
+  const myAtk = state.player.baseAtk + JOBS[state.player.job].atkBonus;
+  if (myAtk >= reqAtk) {
+    state.player.towerFloor++;
+    state.player.gold += 200;
+    log(`🎉 通關無盡之塔第 ${state.player.towerFloor - 1} 層！獲得 200 金幣！`);
+  } else {
+    log(`❌ 挑戰失敗！第 ${state.player.towerFloor} 層 BOSS 需要戰力 ${reqAtk}`);
+  }
+  updateUI();
+}
+
+// --- 頁籤切換 ---
+function switchTab(evt, tabId) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  
+  evt.currentTarget.classList.add('active');
+  document.getElementById(`tab-${tabId}`).classList.add('active');
+
+  if (tabId === 'rank') loadRankings();
+}
+
+// 掛機計時器 (每 3 秒自動戰鬥)
+setInterval(() => {
+  state.player.exp += 20;
+  state.player.gold += 15;
+  state.player.wood += 2;
+  
+  if (state.player.exp >= state.player.maxExp) {
+    state.player.level++;
+    state.player.exp -= state.player.maxExp;
+    state.player.maxExp = Math.floor(state.player.maxExp * 1.5);
+    state.player.baseAtk += 5;
+    log(`🌟 恭喜升級！當前等級：Lv.${state.player.level}`);
+  }
+
+  if (Math.random() < 0.3) {
+    state.inventory.push({
+      id: Date.now(),
+      name: state.zone === 'boss' ? "魔王城堡戰刀" : "野蠻短劍",
+      type: "weapon",
+      atk: state.zone === 'boss' ? 17 : 8,
+      quality: state.zone === 'boss' ? "rare" : "common"
+    });
+    log(`🎁 戰鬥勝利，獲得裝備！`);
+  }
+
+  updateUI();
+}, 3000);
+
+// 初始化
+updateUI();
+log("🎮 遊戲已載入，掛機戰鬥中...");
