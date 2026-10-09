@@ -3,151 +3,95 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Milky Way Idle RPG</title>
+  <title>文字放置 RPG - 重構版</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="app">
-    <!-- 頂部玩家資訊欄 -->
-    <header class="top-bar">
-      <div class="user-info">
-        <span id="player-name">冒險者</span>
-        <span id="player-level" class="badge">Lv.1</span>
-      </div>
-      <div class="resources">
-        <span>💰 <strong id="gold-val">0</strong></span>
-        <span>🥛 <strong id="milk-val">0</strong></span>
-        <span>🪵 <strong id="wood-val">0</strong></span>
-      </div>
-    </header>
 
-    <!-- 畫布與動作顯示 -->
-    <main class="game-view">
-      <div class="canvas-container">
-        <canvas id="gameCanvas"></canvas>
-      </div>
-      <div class="action-progress">
-        <div id="action-progress-fill"></div>
-        <span id="current-action-text">⚡ 當前工作：自動打怪</span>
-      </div>
-    </main>
+<div class="game-container">
 
-    <!-- 導覽頁籤 -->
-    <nav class="tab-nav">
-      <button class="nav-btn active" data-tab="tab-work">🔨 掛機</button>
-      <button class="nav-btn" data-tab="tab-map">🗺️ 地圖</button>
-      <button class="nav-btn" data-tab="tab-equip">⚔️ 裝備與背包</button>
-      <button class="nav-btn" data-tab="tab-craft">🛠️ 鍛造交易</button>
-      <button class="nav-btn" data-tab="tab-rank">🏆 排行榜</button>
-    </nav>
-
-    <!-- 頁籤內容區塊 -->
-    <section class="tab-content">
-      <!-- 1. 掛機工作 -->
-      <div id="tab-work" class="tab-panel active">
-        <div class="card-grid">
-          <div class="action-card active-work" data-action="combat">
-            <h3>⚔️ 野外打怪</h3>
-            <p>獲取金幣、經驗與裝備掉落</p>
-          </div>
-          <div class="action-card" data-action="milking">
-            <h3>🥛 牧場擠奶</h3>
-            <p>採集牛奶原料</p>
-          </div>
-          <div class="action-card" data-action="woodcutting">
-            <h3>🌲 森林伐木</h3>
-            <p>採集木材原料</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- 2. 地圖副本 -->
-      <div id="tab-map" class="tab-panel">
-        <h3>🗺️ 選擇冒險地圖</h3>
-        <div class="card-grid">
-          <div class="map-card active-map" data-map="goblin">
-            <h4>👺 哥布林營地 (Lv.1+)</h4>
-            <p>基礎怪獸，適合新手掛機</p>
-          </div>
-          <div class="map-card" data-map="forest">
-            <h4>🐺 迷霧森林 (Lv.5+)</h4>
-            <p>掉落木質護甲與大量經驗</p>
-          </div>
-          <div class="map-card" data-map="boss">
-            <h4>🐲 魔王城堡 (Lv.10+)</h4>
-            <p>極高難度，掉落傳說武器</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- 3. 裝備與背包 -->
-      <div id="tab-equip" class="tab-panel">
-        <h3>🛡️ 已裝備內容</h3>
-        <div class="equip-slots">
-          <div class="equip-box">武器：<span id="eq-weapon-name">無</span> (+<span id="eq-weapon-atk">0</span> 攻)</div>
-          <div class="equip-box">防具：<span id="eq-armor-name">無</span> (+<span id="eq-armor-def">0</span> 防)</div>
-        </div>
-        <h3>🎒 背包空間</h3>
-        <div id="inventory-list" class="inventory-container"></div>
-      </div>
-
-      <!-- 4. 鍛造與交易 -->
-      <div id="tab-craft" class="tab-panel">
-        <h3>🛠️ 工坊合成</h3>
-        <div class="craft-group">
-          <button class="craft-btn" data-craft="cheese">🧀 製作起司 (5牛奶)</button>
-          <button class="craft-btn" data-craft="sword">🗡️ 鍛造精鋼長劍 (10木材 + 50金幣)</button>
-          <button class="craft-btn" data-craft="armor">🛡️ 鍛造硬木重甲 (15木材 + 80金幣)</button>
-        </div>
-        <h3>🏪 交易所</h3>
-        <div class="craft-group">
-          <button id="sell-milk-btn">💰 出售 10 牛奶 (+20金幣)</button>
-          <button id="sell-wood-btn">💰 出售 10 木材 (+30金幣)</button>
-        </div>
-      </div>
-
-      <!-- 5. 全服排行榜 -->
-      <div id="tab-rank" class="tab-panel">
-        <h3>🏆 全服玩家排行榜</h3>
-        <button id="refresh-rank-btn" class="sub-btn">🔄 刷新排行榜</button>
-        <ul id="rank-list" class="rank-ul">
-          <li>載入中...</li>
-        </ul>
-      </div>
-    </section>
-
-    <!-- 底部日誌區 -->
-    <footer class="log-container">
-      <div id="log-box"></div>
-    </footer>
-  </div>
-
-  <!-- 登入 Modal -->
-  <div id="login-modal" class="modal">
-    <div class="modal-content">
-      <h2>Milky Way Idle RPG</h2>
-      <button id="google-btn" class="auth-btn google">🌐 使用 Google 帳號登入</button>
-      <div class="divider">— 或使用 Email 登入 / 註冊 —</div>
-      <form id="auth-form">
-        <input type="email" id="email-input" placeholder="Email 地址" required>
-        <input type="password" id="password-input" placeholder="密碼（至少 6 位數）" required minlength="6">
-        <input type="text" id="nickname-input" placeholder="角色暱稱（選填）" maxlength="10">
-        <button type="submit" id="submit-btn" class="auth-btn">開始冒險（登入 / 註冊）</button>
-      </form>
-      <p id="auth-error" class="error-msg"></p>
+  <!-- 角色狀態與轉職系統 -->
+  <div class="card">
+    <h2>👤 角色狀態與職業</h2>
+    <p>玩家：<strong id="p-name">冒險者</strong></p>
+    <p>職業：<span id="p-job" class="highlight">見習冒險者</span></p>
+    <p>等級：<span id="p-level">1</span> (EXP: <span id="p-exp">0</span>/<span id="p-max-exp">100</span>)</p>
+    <p>戰力：⚔️ 攻擊 <span id="p-atk">10</span> | 🛡️ 防禦 <span id="p-def">2</span></p>
+    <p>資產：💰 金幣 <span id="p-gold">500</span> | 🪵 木材 <span id="p-wood">0</span></p>
+    <div id="job-change-container" class="job-container">
+      <small class="sub-text">達到 Lv.15 可選擇職業轉職：</small><br>
+      <button class="btn btn-sm" onclick="changeJob('warrior')">狂戰士</button>
+      <button class="btn btn-sm" onclick="changeJob('mage')">大魔導士</button>
+      <button class="btn btn-sm" onclick="changeJob('smith')">神鍛匠</button>
     </div>
   </div>
 
-  <!-- 離線收益 Modal -->
-  <div id="offline-modal" class="modal hidden">
-    <div class="modal-content">
-      <h2>🎁 歡迎回來！離線掛機收益</h2>
-      <p id="offline-summary"></p>
-      <p id="offline-rewards" class="highlight"></p>
-      <button id="claim-offline-btn" class="auth-btn">領取獎勵</button>
+  <!-- 掛機與副本挑戰 -->
+  <div class="card">
+    <h2>⚔️ 冒險與無盡之塔</h2>
+    <p>當前區域：<strong id="current-zone">哥布林營地</strong></p>
+    <div class="btn-group">
+      <button class="btn btn-sm" onclick="setZone('goblin')">哥布林營地 (Lv.1)</button>
+      <button class="btn btn-sm" onclick="setZone('forest')">迷霧森林 (Lv.5)</button>
+      <button class="btn btn-sm" onclick="setZone('boss')">魔王城堡 (Lv.10)</button>
+    </div>
+    <hr class="divider">
+    <p>🏰 無盡之塔 (第 <span id="tower-floor">1</span> 層)</p>
+    <button class="btn btn-success btn-sm" onclick="challengeTower()">挑戰層數 BOSS</button>
+  </div>
+
+  <!-- 背包系統 -->
+  <div class="card full-width">
+    <div class="card-header">
+      <h2>🎒 裝備與背包</h2>
+      <button class="btn btn-danger btn-sm" onclick="autoCleanInventory()">🧹 一鍵出售低階裝備</button>
+    </div>
+    <div id="inventory-list" class="item-list"></div>
+  </div>
+
+  <!-- 工坊合成、交易所與排行榜 -->
+  <div class="card full-width">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab(event, 'craft')">🔨 職人工坊 (合成)</button>
+      <button class="tab-btn" onclick="switchTab(event, 'market')">⚖️ P2P 玩家交易所</button>
+      <button class="tab-btn" onclick="switchTab(event, 'rank')">🏆 全服排行榜</button>
+    </div>
+
+    <!-- 工坊區 -->
+    <div id="tab-craft" class="tab-content active">
+      <p class="sub-text">部分進階裝備需要指定副職業（如神鍛匠）才能合成：</p>
+      <div class="btn-group">
+        <button class="btn btn-sm" onclick="craftItem('iron_sword')">合成 精鋼長劍 (需神鍛匠)</button>
+        <button class="btn btn-sm" onclick="craftItem('wood_shield')">合成 硬木盾 (全職業)</button>
+      </div>
+    </div>
+
+    <!-- 交易所區 -->
+    <div id="tab-market" class="tab-content">
+      <div class="btn-group">
+        <button class="btn btn-sm btn-success" onclick="createMarketOrder()">+ 上架當前裝備 (500💰)</button>
+      </div>
+      <div id="market-list" class="item-list"></div>
+    </div>
+
+    <!-- 排行榜區 -->
+    <div id="tab-rank" class="tab-content">
+      <div class="card-header">
+        <span>排行榜單 (異步連線與容錯保護)</span>
+        <button class="btn btn-sm" onclick="loadRankings()">🔄 重整列表</button>
+      </div>
+      <div id="rank-list" class="item-list"></div>
     </div>
   </div>
 
-  <script type="module" src="game.js"></script>
+  <!-- 冒險日誌 -->
+  <div class="card full-width">
+    <h2>📜 冒險日誌</h2>
+    <div id="log-box"></div>
+  </div>
+
+</div>
+
+<script src="game.js"></script>
 </body>
 </html>
