@@ -3,31 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Milky Way Idle</title>
+  <title>Milky Way Idle Clone</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- 登入 Modal -->
+  <!-- 登入與角色建立 Modal -->
   <div id="login-modal" class="modal-overlay">
     <div class="modal-card">
       <div class="mwi-logo">🌌 Milky Way Idle</div>
-      <p class="sub-text">請輸入角色暱稱開始遊戲</p>
+      <p class="sub-text">輸入角色暱稱即可自動連線/建立帳號</p>
       
       <form id="auth-form">
-        <input type="text" id="nickname-input" placeholder="角色暱稱 (例如: goosewwwww)" class="input-field" value="goosewwwww" required>
-        <button type="submit" class="btn btn-primary full-btn">進入遊戲</button>
+        <input type="text" id="nickname-input" placeholder="角色暱稱 (例: Gooseuwu)" class="input-field" value="Gooseuwu" required>
+        <button type="submit" class="btn btn-primary full-btn">踏入星河冒險</button>
       </form>
     </div>
   </div>
 
-  <!-- 遊戲主要佈局 -->
+  <!-- 遊戲主要佈局容器 -->
   <div class="mwi-app">
 
-    <!-- 1. 左側導覽列 -->
+    <!-- 1. 左側可收折選單欄 -->
     <aside id="sidebar" class="mwi-sidebar">
       <div class="sidebar-header">
         <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+        <span class="active-title">選單</span>
       </div>
 
       <div class="sidebar-menu">
@@ -35,11 +36,12 @@
           <span class="nav-icon">📦</span><span class="nav-text">我的物品</span>
         </div>
         <div class="nav-item" onclick="switchMainTab('tab-market')">
-          <span class="nav-icon">🏪</span><span class="nav-text">市場</span>
+          <span class="nav-icon">🏪</span><span class="nav-text">交易所</span>
         </div>
         
         <div class="menu-divider"></div>
 
+        <!-- 12 大獨立產業鏈選單 (含等級與經驗條) -->
         <div class="nav-item active" onclick="openSkillPage('milking')">
           <span class="nav-icon">🥛</span>
           <div class="skill-info-wrap">
@@ -51,7 +53,7 @@
         <div class="nav-item" onclick="openSkillPage('foraging')">
           <span class="nav-icon">🍄</span>
           <div class="skill-info-wrap">
-            <div class="skill-name-row"><span>採摘</span><span class="sk-lv" id="sk-lv-foraging">1</span></div>
+            <div class="skill-name-row"><span>採摘/種植</span><span class="sk-lv" id="sk-lv-foraging">1</span></div>
             <div class="mini-progress"><div id="sk-bar-foraging" class="mini-fill"></div></div>
           </div>
         </div>
@@ -61,6 +63,22 @@
           <div class="skill-info-wrap">
             <div class="skill-name-row"><span>伐木</span><span class="sk-lv" id="sk-lv-woodcutting">1</span></div>
             <div class="mini-progress"><div id="sk-bar-woodcutting" class="mini-fill"></div></div>
+          </div>
+        </div>
+
+        <div class="nav-item" onclick="openSkillPage('mining')">
+          <span class="nav-icon">⛏️</span>
+          <div class="skill-info-wrap">
+            <div class="skill-name-row"><span>採礦冶煉</span><span class="sk-lv" id="sk-lv-mining">1</span></div>
+            <div class="mini-progress"><div id="sk-bar-mining" class="mini-fill"></div></div>
+          </div>
+        </div>
+
+        <div class="nav-item" onclick="openSkillPage('fishing')">
+          <span class="nav-icon">🎣</span>
+          <div class="skill-info-wrap">
+            <div class="skill-name-row"><span>釣魚</span><span class="sk-lv" id="sk-lv-fishing">1</span></div>
+            <div class="mini-progress"><div id="sk-bar-fishing" class="mini-fill"></div></div>
           </div>
         </div>
 
@@ -80,10 +98,50 @@
           </div>
         </div>
 
+        <div class="nav-item" onclick="openSkillPage('brewing')">
+          <span class="nav-icon">☕</span>
+          <div class="skill-info-wrap">
+            <div class="skill-name-row"><span>沖泡</span><span class="sk-lv" id="sk-lv-brewing">1</span></div>
+            <div class="mini-progress"><div id="sk-bar-brewing" class="mini-fill"></div></div>
+          </div>
+        </div>
+
+        <div class="nav-item" onclick="openSkillPage('tailoring')">
+          <span class="nav-icon">👚</span>
+          <div class="skill-info-wrap">
+            <div class="skill-name-row"><span>縫紉</span><span class="sk-lv" id="sk-lv-tailoring">1</span></div>
+            <div class="mini-progress"><div id="sk-bar-tailoring" class="mini-fill"></div></div>
+          </div>
+        </div>
+
+        <div class="nav-item" onclick="openSkillPage('crafting')">
+          <span class="nav-icon">🛠️</span>
+          <div class="skill-info-wrap">
+            <div class="skill-name-row"><span>製作</span><span class="sk-lv" id="sk-lv-crafting">1</span></div>
+            <div class="mini-progress"><div id="sk-bar-crafting" class="mini-fill"></div></div>
+          </div>
+        </div>
+
+        <div class="nav-item" onclick="openSkillPage('alchemy')">
+          <span class="nav-icon">🧪</span>
+          <div class="skill-info-wrap">
+            <div class="skill-name-row"><span>煉金</span><span class="sk-lv" id="sk-lv-alchemy">1</span></div>
+            <div class="mini-progress"><div id="sk-bar-alchemy" class="mini-fill"></div></div>
+          </div>
+        </div>
+
+        <div class="nav-item" onclick="openSkillPage('enhancing')">
+          <span class="nav-icon">📜</span>
+          <div class="skill-info-wrap">
+            <div class="skill-name-row"><span>強化</span><span class="sk-lv" id="sk-lv-enhancing">1</span></div>
+            <div class="mini-progress"><div id="sk-bar-enhancing" class="mini-fill"></div></div>
+          </div>
+        </div>
+
         <div class="nav-item" onclick="openSkillPage('combat')">
           <span class="nav-icon">⚔️</span>
           <div class="skill-info-wrap">
-            <div class="skill-name-row"><span>戰鬥</span><span class="sk-lv" id="sk-lv-combat">1</span></div>
+            <div class="skill-name-row"><span>戰鬥冒險</span><span class="sk-lv" id="sk-lv-combat">1</span></div>
             <div class="mini-progress"><div id="sk-bar-combat" class="mini-fill"></div></div>
           </div>
         </div>
@@ -91,10 +149,10 @@
         <div class="menu-divider"></div>
 
         <div class="nav-item" onclick="switchMainTab('tab-rank')">
-          <span class="nav-icon">🏆</span><span class="nav-text">排行榜</span>
+          <span class="nav-icon">🏆</span><span class="nav-text">全服排行榜</span>
         </div>
         <div class="nav-item" onclick="switchMainTab('tab-settings')">
-          <span class="nav-icon">⚙️</span><span class="nav-text">設定</span>
+          <span class="nav-icon">⚙️</span><span class="nav-text">系統設定</span>
         </div>
       </div>
     </aside>
@@ -102,13 +160,13 @@
     <!-- 2. 右側主要顯示區 -->
     <main class="mwi-main">
 
-      <!-- 頂部資訊列 -->
+      <!-- 頂部資訊與當前動作狀態列 -->
       <header class="mwi-header">
         <div class="user-status-box">
           <div class="user-avatar">👤</div>
           <div class="user-text">
-            <div id="username-display" class="uname">goosewwwww</div>
-            <div class="utotal">總等級: <span id="total-level-val">6</span></div>
+            <div id="username-display" class="uname">Gooseuwu</div>
+            <div class="utotal">總等級: <span id="total-level-val">12</span></div>
           </div>
         </div>
 
@@ -125,54 +183,58 @@
         <button class="btn-stop" onclick="stopCurrentAction()">停止</button>
       </header>
 
-      <!-- 主要分頁內容區 -->
+      <!-- 主要分頁 View 視窗 -->
       <div class="mwi-body">
 
-        <!-- 頁籤 A: 工作選擇區 -->
+        <!-- 頁籤 A: 產業工作與配方面板 -->
         <section id="tab-skill-page" class="main-panel active">
-          <h2 id="page-skill-title" class="page-title">擠奶</h2>
+          <div class="skill-header-row">
+            <h2 id="page-skill-title" class="page-title">擠奶</h2>
+            <div id="skill-mastery-title" class="mastery-tag"></div>
+          </div>
           <div id="action-cards-grid" class="cards-grid"></div>
         </section>
 
-        <!-- 頁籤 B: 倉庫 -->
+        <!-- 頁籤 B: 倉庫 (我的物品) -->
         <section id="tab-inventory" class="main-panel">
           <div class="panel-top">
-            <h2 class="page-title">📦 我的物品</h2>
+            <h2 class="page-title">📦 我的物品 (<span id="inv-capacity">0</span>/100)</h2>
             <div class="gold-disp">💰 金幣: <span id="gold-val">0</span></div>
           </div>
           <div id="inventory-grid" class="inventory-grid"></div>
         </section>
 
-        <!-- 頁籤 C: 市場 -->
+        <!-- 頁籤 C: 玩家交易所 (純 P2P 交易) -->
         <section id="tab-market" class="main-panel">
           <div class="panel-top">
-            <h2 class="page-title">🏪 玩家市場</h2>
-            <button class="btn-primary" onclick="sellItemModal()">+ 上架物品</button>
+            <h2 class="page-title">🏪 自由交易所</h2>
+            <button class="btn-primary" onclick="openSellDialog()">+ 上架背包物品</button>
           </div>
           <div id="market-list" class="list-container"></div>
         </section>
 
-        <!-- 頁籤 D: 排行榜 -->
+        <!-- 頁籤 D: 真實排行榜 -->
         <section id="tab-rank" class="main-panel">
           <div class="panel-top">
-            <h2 class="page-title">🏆 全服排行榜</h2>
-            <button class="btn-sec" onclick="loadLeaderboard()">刷新</button>
+            <h2 class="page-title">🏆 全服排行 (真實數據)</h2>
+            <button class="btn-sec" onclick="loadLeaderboard()">刷新排名</button>
           </div>
           <div id="rank-list" class="list-container"></div>
         </section>
 
-        <!-- 頁籤 E: 設定 -->
+        <!-- 頁籤 E: 系統設定 -->
         <section id="tab-settings" class="main-panel">
-          <h2 class="page-title">⚙️ 系統設定</h2>
+          <h2 class="page-title">⚙️ 帳號與系統設定</h2>
           <div class="settings-card">
-            <p>角色名稱：<strong id="settings-name-text">goosewwwww</strong></p>
-            <p>存檔狀態：<span style="color:#4ade80;">🟢 本地/雲端自動存檔</span></p>
+            <p>當前角色：<strong id="settings-name-text">Gooseuwu</strong></p>
+            <p>資料備份：<span style="color:#4ade80;">🟢 Firebase / 本地雙重同步</span></p>
+            <p>超越加成：<span id="transcend-bonus-text">動作速度 +0%</span></p>
           </div>
         </section>
 
       </div>
 
-      <!-- 底部日誌區 -->
+      <!-- 底部即時動作日誌 -->
       <footer class="mwi-footer">
         <div id="log-box" class="log-box"></div>
       </footer>
