@@ -3,95 +3,178 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>文字放置 RPG - 重構版</title>
+  <title>Milky Way RPG - 硬核數值重構版</title>
   <link rel="stylesheet" href="style.css">
+  <!-- Firebase SDK (v10) -->
+  <script type="module" src="game.js"></script>
 </head>
 <body>
 
-<div class="game-container">
+  <!-- 登入 Modal -->
+  <div id="login-modal" class="modal-overlay">
+    <div class="modal-card">
+      <h2>✨ 歡迎來到 Milky Way RPG</h2>
+      <p class="sub-text">請登入以同步雲端存檔與全服排行榜</p>
+      
+      <button id="google-login-btn" class="btn btn-google">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18"> Google 快速登入
+      </button>
 
-  <!-- 角色狀態與轉職系統 -->
-  <div class="card">
-    <h2>👤 角色狀態與職業</h2>
-    <p>玩家：<strong id="p-name">冒險者</strong></p>
-    <p>職業：<span id="p-job" class="highlight">見習冒險者</span></p>
-    <p>等級：<span id="p-level">1</span> (EXP: <span id="p-exp">0</span>/<span id="p-max-exp">100</span>)</p>
-    <p>戰力：⚔️ 攻擊 <span id="p-atk">10</span> | 🛡️ 防禦 <span id="p-def">2</span></p>
-    <p>資產：💰 金幣 <span id="p-gold">500</span> | 🪵 木材 <span id="p-wood">0</span></p>
-    <div id="job-change-container" class="job-container">
-      <small class="sub-text">達到 Lv.15 可選擇職業轉職：</small><br>
-      <button class="btn btn-sm" onclick="changeJob('warrior')">狂戰士</button>
-      <button class="btn btn-sm" onclick="changeJob('mage')">大魔導士</button>
-      <button class="btn btn-sm" onclick="changeJob('smith')">神鍛匠</button>
+      <div class="divider-text">或使用 Email</div>
+
+      <form id="auth-form">
+        <input type="text" id="nickname-input" placeholder="角色暱稱" class="input-field">
+        <input type="email" id="email-input" placeholder="電子郵件" class="input-field" required>
+        <input type="password" id="password-input" placeholder="密碼" class="input-field" required>
+        <button type="submit" class="btn btn-primary full-btn">登入 / 自動註冊</button>
+      </form>
     </div>
   </div>
 
-  <!-- 掛機與副本挑戰 -->
-  <div class="card">
-    <h2>⚔️ 冒險與無盡之塔</h2>
-    <p>當前區域：<strong id="current-zone">哥布林營地</strong></p>
-    <div class="btn-group">
-      <button class="btn btn-sm" onclick="setZone('goblin')">哥布林營地 (Lv.1)</button>
-      <button class="btn btn-sm" onclick="setZone('forest')">迷霧森林 (Lv.5)</button>
-      <button class="btn btn-sm" onclick="setZone('boss')">魔王城堡 (Lv.10)</button>
-    </div>
-    <hr class="divider">
-    <p>🏰 無盡之塔 (第 <span id="tower-floor">1</span> 層)</p>
-    <button class="btn btn-success btn-sm" onclick="challengeTower()">挑戰層數 BOSS</button>
-  </div>
+  <!-- 遊戲主要 App -->
+  <div class="mwi-app">
 
-  <!-- 背包系統 -->
-  <div class="card full-width">
-    <div class="card-header">
-      <h2>🎒 裝備與背包</h2>
-      <button class="btn btn-danger btn-sm" onclick="autoCleanInventory()">🧹 一鍵出售低階裝備</button>
-    </div>
-    <div id="inventory-list" class="item-list"></div>
-  </div>
-
-  <!-- 工坊合成、交易所與排行榜 -->
-  <div class="card full-width">
-    <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab(event, 'craft')">🔨 職人工坊 (合成)</button>
-      <button class="tab-btn" onclick="switchTab(event, 'market')">⚖️ P2P 玩家交易所</button>
-      <button class="tab-btn" onclick="switchTab(event, 'rank')">🏆 全服排行榜</button>
-    </div>
-
-    <!-- 工坊區 -->
-    <div id="tab-craft" class="tab-content active">
-      <p class="sub-text">部分進階裝備需要指定副職業（如神鍛匠）才能合成：</p>
-      <div class="btn-group">
-        <button class="btn btn-sm" onclick="craftItem('iron_sword')">合成 精鋼長劍 (需神鍛匠)</button>
-        <button class="btn btn-sm" onclick="craftItem('wood_shield')">合成 硬木盾 (全職業)</button>
+    <!-- 左側：角色與技能面板 -->
+    <aside class="sidebar">
+      <div class="user-profile">
+        <div class="avatar">🐮</div>
+        <div class="user-details">
+          <div id="username">冒險者</div>
+          <div class="gold-balance">💰 <span id="gold-val">0</span></div>
+        </div>
       </div>
-    </div>
 
-    <!-- 交易所區 -->
-    <div id="tab-market" class="tab-content">
-      <div class="btn-group">
-        <button class="btn btn-sm btn-success" onclick="createMarketOrder()">+ 上架當前裝備 (500💰)</button>
+      <!-- RPG 基礎屬性配點 -->
+      <div class="card-sm">
+        <div class="section-title">📊 角色屬性 (可用點數: <span id="stat-points" class="highlight">0</span>)</div>
+        <div class="stat-row">
+          <span>💪 力量 (STR): <b id="stat-str">10</b></span>
+          <button class="btn btn-xs" onclick="addStat('str')">+</button>
+        </div>
+        <div class="stat-row">
+          <span>⚡ 敏捷 (AGI): <b id="stat-agi">10</b></span>
+          <button class="btn btn-xs" onclick="addStat('agi')">+</button>
+        </div>
+        <div class="stat-row">
+          <span>🧠 智力 (INT): <b id="stat-int">10</b></span>
+          <button class="btn btn-xs" onclick="addStat('int')">+</button>
+        </div>
+        <div class="stat-row">
+          <span>🍀 幸運 (LUK): <b id="stat-luk">10</b></span>
+          <button class="btn btn-xs" onclick="addStat('luk')">+</button>
+        </div>
       </div>
-      <div id="market-list" class="item-list"></div>
-    </div>
 
-    <!-- 排行榜區 -->
-    <div id="tab-rank" class="tab-content">
-      <div class="card-header">
-        <span>排行榜單 (異步連線與容錯保護)</span>
-        <button class="btn btn-sm" onclick="loadRankings()">🔄 重整列表</button>
+      <div class="skill-category">生活與生產技能</div>
+      <div class="skill-list">
+        <div class="skill-card active" onclick="selectAction('milking')">
+          <span>🥛 擠奶 (Milking)</span>
+          <span class="skill-level">Lv.<span id="sk-milking">1</span></span>
+        </div>
+        <div class="skill-card" onclick="selectAction('woodcutting')">
+          <span>🌲 伐木 (Woodcutting)</span>
+          <span class="skill-level">Lv.<span id="sk-woodcutting">1</span></span>
+        </div>
+        <div class="skill-card" onclick="selectAction('cheesesmithing')">
+          <span>🧀 起司鍛造 (Cheesesmithing)</span>
+          <span class="skill-level">Lv.<span id="sk-cheesesmithing">1</span></span>
+        </div>
       </div>
-      <div id="rank-list" class="item-list"></div>
-    </div>
+
+      <div class="skill-category">戰鬥領域</div>
+      <div class="skill-list">
+        <div class="skill-card" onclick="selectAction('combat')">
+          <span>⚔️ 星域討伐 (Combat)</span>
+          <span class="skill-level">Lv.<span id="sk-combat">1</span></span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右側：主內容區 -->
+    <main class="main-content">
+
+      <!-- 動態進度條 -->
+      <div class="action-status-panel">
+        <div class="action-info">
+          <span id="current-action-name">🥛 正在進行：牧場擠奶</span>
+          <span id="action-stats-detail">動作速度: +0% | 雙倍率: 0%</span>
+        </div>
+        <div class="progress-bar-container">
+          <div id="action-progress" class="progress-bar-fill"></div>
+        </div>
+      </div>
+
+      <!-- 頁籤 -->
+      <div class="content-tabs">
+        <button class="tab-btn active" onclick="switchTab(event, 'tab-action')">⚡ 戰鬥與生產</button>
+        <button class="tab-btn" onclick="switchTab(event, 'tab-inventory')">🎒 背包與裝備</button>
+        <button class="tab-btn" onclick="switchTab(event, 'tab-forge')">🔨 衝階與洗鍊</button>
+        <button class="tab-btn" onclick="switchTab(event, 'tab-talents')">🌳 技能天賦樹</button>
+        <button class="tab-btn" onclick="switchTab(event, 'tab-rank')">🏆 全服排行榜</button>
+      </div>
+
+      <!-- 頁籤 1：動作詳情與 Canvas 戰鬥視覺 -->
+      <div id="tab-action" class="tab-panel active">
+        <div class="canvas-container">
+          <canvas id="gameCanvas"></canvas>
+        </div>
+      </div>
+
+      <!-- 頁籤 2：背包與裝備（帶隨機詞條與自動堆疊） -->
+      <div id="tab-inventory" class="tab-panel">
+        <div class="card-header">
+          <h3>🎒 倉庫儲物與裝備</h3>
+          <button class="btn btn-danger btn-sm" onclick="autoCleanInventory()">🧹 一鍵分解低階裝備</button>
+        </div>
+        <div id="inventory-grid" class="inventory-grid"></div>
+      </div>
+
+      <!-- 頁籤 3：衝階強化 (+1~+15) -->
+      <div id="tab-forge" class="tab-panel">
+        <h3>🔨 裝備精煉衝階 (+1 ~ +15)</h3>
+        <p class="sub-text">選擇背包中的裝備進行精煉，提升巨額基礎屬性！</p>
+        <div id="forge-panel" class="forge-box">
+          <p>請先點擊背包中的裝備進行選擇...</p>
+        </div>
+      </div>
+
+      <!-- 頁籤 4：天賦樹 -->
+      <div id="tab-talents" class="tab-panel">
+        <h3>🌳 專精天賦樹</h3>
+        <div class="talent-grid">
+          <div class="talent-card" onclick="upgradeTalent('speed')">
+            <h4>⚡ 神速流 (Lv.<span id="tal-speed">0</span>)</h4>
+            <p>減少所有技能 5% 動作時間</p>
+          </div>
+          <div class="talent-card" onclick="upgradeTalent('double')">
+            <h4>✨ 豐收流 (Lv.<span id="tal-double">0</span>)</h4>
+            <p>增加 5% 雙倍產出與雙倍經驗機率</p>
+          </div>
+          <div class="talent-card" onclick="upgradeTalent('crit')">
+            <h4>💥 暴擊流 (Lv.<span id="tal-crit">0</span>)</h4>
+            <p>增加 5% 戰鬥暴擊率與 15% 暴擊傷害</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 頁籤 5：全服排行榜 -->
+      <div id="tab-rank" class="tab-panel">
+        <div class="card-header">
+          <h3>🏆 全服實力排行榜</h3>
+          <button class="btn btn-sm" id="refresh-rank-btn">🔄 重整</button>
+        </div>
+        <div id="rank-list" class="rank-list"></div>
+      </div>
+
+      <!-- 底部日誌 -->
+      <div class="log-panel">
+        <div class="log-title">📜 冒險日誌</div>
+        <div id="game-logs" class="logs-container"></div>
+      </div>
+
+    </main>
+
   </div>
 
-  <!-- 冒險日誌 -->
-  <div class="card full-width">
-    <h2>📜 冒險日誌</h2>
-    <div id="log-box"></div>
-  </div>
-
-</div>
-
-<script src="game.js"></script>
 </body>
 </html>
