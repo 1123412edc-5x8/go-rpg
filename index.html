@@ -5,39 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Milky Way Idle</title>
   <link rel="stylesheet" href="style.css">
-  <script type="module" src="game.js"></script>
 </head>
 <body>
 
-  <!-- 登入 Modal (未登入前顯示) -->
+  <!-- 登入 Modal -->
   <div id="login-modal" class="modal-overlay">
     <div class="modal-card">
       <div class="mwi-logo">🌌 Milky Way Idle</div>
-      <p class="sub-text">登入以同步雲端進度與全服排行榜</p>
+      <p class="sub-text">請輸入角色暱稱開始遊戲</p>
       
-      <button id="google-login-btn" class="btn btn-google">
-        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18"> Google 帳號快速登入
-      </button>
-
-      <div class="divider-text">或使用 電子郵件</div>
-
       <form id="auth-form">
-        <input type="text" id="nickname-input" placeholder="角色暱稱 (例如: Gooseuwu)" class="input-field" required>
-        <input type="email" id="email-input" placeholder="電子郵件" class="input-field" required>
-        <input type="password" id="password-input" placeholder="密碼" class="input-field" required>
-        <button type="submit" class="btn btn-primary full-btn">登入 / 註冊帳號</button>
+        <input type="text" id="nickname-input" placeholder="角色暱稱 (例如: goosewwwww)" class="input-field" value="goosewwwww" required>
+        <button type="submit" class="btn btn-primary full-btn">進入遊戲</button>
       </form>
     </div>
   </div>
 
-  <!-- 遊戲主要佈局 (1:1 還原 Milky Way Idle) -->
+  <!-- 遊戲主要佈局 -->
   <div class="mwi-app">
 
-    <!-- 左側可收折選單欄 -->
+    <!-- 1. 左側導覽列 -->
     <aside id="sidebar" class="mwi-sidebar">
       <div class="sidebar-header">
         <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
-        <span class="active-count">線上玩家: <strong id="online-count">1</strong></span>
       </div>
 
       <div class="sidebar-menu">
@@ -50,7 +40,6 @@
         
         <div class="menu-divider"></div>
 
-        <!-- 技能列表 (含等級與經驗條) -->
         <div class="nav-item active" onclick="openSkillPage('milking')">
           <span class="nav-icon">🥛</span>
           <div class="skill-info-wrap">
@@ -110,20 +99,19 @@
       </div>
     </aside>
 
-    <!-- 右側主要區域 -->
+    <!-- 2. 右側主要顯示區 -->
     <main class="mwi-main">
 
-      <!-- 頂部資訊列 (1:1 照 Milky Way 佈局) -->
+      <!-- 頂部資訊列 -->
       <header class="mwi-header">
         <div class="user-status-box">
           <div class="user-avatar">👤</div>
           <div class="user-text">
-            <div id="username-display" class="uname">Gooseuwu</div>
+            <div id="username-display" class="uname">goosewwwww</div>
             <div class="utotal">總等級: <span id="total-level-val">6</span></div>
           </div>
         </div>
 
-        <!-- 當前工作進度條與停止按鈕 -->
         <div class="action-bar-container">
           <div class="action-title-row">
             <span id="current-action-text">🥛 擠奶中...</span>
@@ -137,27 +125,16 @@
         <button class="btn-stop" onclick="stopCurrentAction()">停止</button>
       </header>
 
-      <!-- 主要內容視窗 -->
+      <!-- 主要分頁內容區 -->
       <div class="mwi-body">
 
-        <!-- 頁籤 A: 技能工作頁面 (如採摘/擠奶) -->
+        <!-- 頁籤 A: 工作選擇區 -->
         <section id="tab-skill-page" class="main-panel active">
-          <h2 id="page-skill-title" class="page-title">採摘</h2>
-          
-          <!-- 上方場景區域子分頁 -->
-          <div class="sub-zone-tabs">
-            <button class="zone-tab active">翠野農場</button>
-            <button class="zone-tab">波光湖泊</button>
-            <button class="zone-tab">迷霧森林</button>
-          </div>
-
-          <!-- 工作項目選擇卡片區 (大型 Icon 方塊) -->
-          <div id="action-cards-grid" class="cards-grid">
-            <!-- 動態生成卡片 -->
-          </div>
+          <h2 id="page-skill-title" class="page-title">擠奶</h2>
+          <div id="action-cards-grid" class="cards-grid"></div>
         </section>
 
-        <!-- 頁籤 B: 我的物品 (倉庫) -->
+        <!-- 頁籤 B: 倉庫 -->
         <section id="tab-inventory" class="main-panel">
           <div class="panel-top">
             <h2 class="page-title">📦 我的物品</h2>
@@ -166,7 +143,7 @@
           <div id="inventory-grid" class="inventory-grid"></div>
         </section>
 
-        <!-- 頁籤 C: 市場 (真實玩家交易) -->
+        <!-- 頁籤 C: 市場 -->
         <section id="tab-market" class="main-panel">
           <div class="panel-top">
             <h2 class="page-title">🏪 玩家市場</h2>
@@ -175,7 +152,7 @@
           <div id="market-list" class="list-container"></div>
         </section>
 
-        <!-- 頁籤 D: 排行榜 (真實數據) -->
+        <!-- 頁籤 D: 排行榜 -->
         <section id="tab-rank" class="main-panel">
           <div class="panel-top">
             <h2 class="page-title">🏆 全服排行榜</h2>
@@ -188,9 +165,8 @@
         <section id="tab-settings" class="main-panel">
           <h2 class="page-title">⚙️ 系統設定</h2>
           <div class="settings-card">
-            <p>角色名稱：<strong id="settings-name-text">-</strong></p>
-            <p>雲端備份：<span style="color:#4ade80;">🟢 已即時同步</span></p>
-            <button class="btn-danger" onclick="handleLogout()">登出帳號</button>
+            <p>角色名稱：<strong id="settings-name-text">goosewwwww</strong></p>
+            <p>存檔狀態：<span style="color:#4ade80;">🟢 本地/雲端自動存檔</span></p>
           </div>
         </section>
 
@@ -205,5 +181,6 @@
 
   </div>
 
+  <script type="module" src="game.js"></script>
 </body>
 </html>
