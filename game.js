@@ -1,10 +1,10 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
 import { 
   getAuth, signInWithRedirect, GoogleAuthProvider,
-  createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged
+  createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import { 
-  getDatabase, ref, set, get
+  getDatabase, ref, set, get, push, remove
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
 // --- 1. Firebase 金鑰設定 ---
@@ -23,10 +23,10 @@ const auth = getAuth(app);
 const db = getDatabase(app);
 let currentUid = null;
 
-// --- 2. RPG 核心狀態（含配點、衝階、天賦、隨機詞條） ---
+// --- 2. 遊戲狀態 ---
 const state = {
   player: {
-    name: "冒險者",
+    name: "星河冒險家",
     gold: 200,
     statPoints: 5,
     stats: { str: 10, agi: 10, int: 10, luk: 10 }
@@ -35,39 +35,51 @@ const state = {
     milking: { level: 1, exp: 0, maxExp: 100 },
     woodcutting: { level: 1, exp: 0, maxExp: 100 },
     cheesesmithing: { level: 1, exp: 0, maxExp: 100 },
+    cooking: { level: 1, exp: 0, maxExp: 100 },
+    alchemy: { level: 1, exp: 0, maxExp: 100 },
     combat: { level: 1, exp: 0, maxExp: 100 }
   },
-  talents: { speed: 0, double: 0, crit: 0 },
   inventory: [
-    { id: 1, name: "生鏽長劍", type: "weapon", atk: 12, enhance: 0, quality: "common", prefix: "普通" },
-    { id: 2, name: "狂暴的 精鋼劍", type: "weapon", atk: 35, enhance: 3, quality: "epic", prefix: "狂暴的" }
+    { id: 101, name: "生鏽短劍", type: "weapon", atk: 10, quality: "common" },
+    { id: 102, name: "星河戰刀", type: "weapon", atk: 28, quality: "rare" }
   ],
   currentAction: 'milking',
   actionTimer: 0
 };
 
-// --- 3. 動作定義 ---
 const ACTIONS = {
   milking: { title: "🥛 牧場擠奶", skill: "milking", exp: 15, baseTime: 2000 },
   woodcutting: { title: "🌲 森林伐木", skill: "woodcutting", exp: 18, baseTime: 2200 },
-  cheesesmithing: { title: "🧀 起司鍛造", skill: "cheesesmithing", exp: 35, baseTime: 3000 },
-  combat: { title: "⚔️ 星域討伐", skill: "combat", exp: 40, baseTime: 1800 }
+  cheesesmithing: { title: "🧀 起司加工", skill: "cheesesmithing", exp: 30, baseTime: 2800 },
+  cooking: { title: "🍳 料理烹飪", skill: "cooking", exp: 25, baseTime: 2500 },
+  alchemy: { title: "🧪 藥水煉金", skill: "alchemy", exp: 35, baseTime: 3200 },
+  combat: { title: "⚔️ 野外討伐", skill: "combat", exp: 40, baseTime: 1800 }
 };
 
-// --- 4. 遊戲主循環 ---
+// 計算總等級
+function getTotalLevel() {
+  let total = 0;
+  for (let k in state.skills) {
+    total += state.skills[k].level || 1;
+  }
+  return total;
+}
+
+// --- 3. 遊戲主循環 ---
 let lastTime = Date.now();
 function gameLoop() {
   const now = Date.now();
   const dt = now - lastTime;
   lastTime = now;
 
-  const act = ACTIONS[state.currentAction];
-  const speedBonus = (state.player.stats.agi * 0.5) + (state.talents.speed * 5); // AGI 影響速度
+  const act = ACTIONS[state.currentAction] || ACTIONS.milking;
+  const speedBonus = (state.player.stats.agi * 0.5);
   const interval = Math.max(500, act.baseTime * (1 - speedBonus / 100));
 
   state.actionTimer += dt;
   const pct = Math.min(100, (state.actionTimer / interval) * 100);
-  document.getElementById('action-progress').style.width = `${pct}%`;
+  const bar = document.getElementById('action-progress');
+  if (bar) bar.style.width = `${pct}%`;
 
   if (state.actionTimer >= interval) {
     state.actionTimer = 0;
@@ -78,48 +90,38 @@ function gameLoop() {
 }
 
 function executeAction(act) {
-  // 給予技能經驗
   const sk = state.skills[act.skill];
+  if (!sk) return;
+
   sk.exp += act.exp;
   if (sk.exp >= sk.maxExp) {
     sk.exp -= sk.maxExp;
     sk.level++;
     sk.maxExp = Math.floor(sk.maxExp * 1.3);
-    state.player.statPoints += 2; // 升級獲得配點
-    addLog(`🎉 技能【${act.skill.toUpperCase()}】升至 Lv.${sk.level}！獲得 2 屬性點！`);
+    state.player.statPoints += 2;
+    addLog(`🎉 技能【${act.title}】升至 等級 ${sk.level}！獲得 2 點屬性配點！`);
   }
 
-  // 隨機掉落帶有「隨機詞條」的裝備
-  if (Math.random() < 0.25) {
-    generateRandomEquipment();
+  // 掉落武器 (防止 undefined)
+  if (Math.random() < 0.2) {
+    const atkVal = 8 + Math.floor(Math.random() * 10) + Math.floor(state.player.stats.str * 0.8);
+    const newItem = {
+      id: Date.now(),
+      name: act.skill === 'combat' ? "星河長劍" : "採集工具",
+      type: "weapon",
+      atk: atkVal,
+      quality: atkVal > 20 ? "rare" : "common"
+    };
+    state.inventory.push(newItem);
+    addLog(`🎁 獲得裝備：【${newItem.name}】(攻擊力 +${newItem.atk})`);
   }
 
-  state.player.gold += Math.floor(10 + state.player.stats.luk * 0.5); // LUK 影響金幣收益
+  state.player.gold += Math.floor(10 + state.player.stats.luk * 0.5);
   updateUI();
   saveData();
 }
 
-// 產生隨機詞條裝備
-function generateRandomEquipment() {
-  const prefixes = [
-    { name: "殘暴的", extraAtk: 10, quality: "rare" },
-    { name: "輕盈的", extraAtk: 5, quality: "common" },
-    { name: "神聖的", extraAtk: 25, quality: "legendary" }
-  ];
-  const pref = prefixes[Math.floor(Math.random() * prefixes.length)];
-  const newItem = {
-    id: Date.now(),
-    name: `${pref.name} 冒險長劍`,
-    type: "weapon",
-    atk: 10 + pref.extraAtk + state.player.stats.str,
-    enhance: 0,
-    quality: pref.quality
-  };
-  state.inventory.push(newItem);
-  addLog(`🎁 獲得裝備：【${newItem.name}】(攻 +${newItem.atk})！`);
-}
-
-// --- 5. RPG 屬性配點 ---
+// --- 4. 屬性配點 ---
 window.addStat = function(statKey) {
   if (state.player.statPoints > 0) {
     state.player.statPoints--;
@@ -129,23 +131,110 @@ window.addStat = function(statKey) {
   }
 };
 
-// --- 6. 天賦樹升級 ---
-window.upgradeTalent = function(talentKey) {
-  if (state.player.gold >= 100) {
-    state.player.gold -= 100;
-    state.talents[talentKey]++;
-    addLog(`🌳 天賦【${talentKey}】提升至 Lv.${state.talents[talentKey]}`);
-    updateUI();
-    saveData();
-  } else {
-    addLog(`❌ 金幣不足 100，無法升級天賦。`);
-  }
+// --- 5. 背包與一鍵清理 ---
+window.autoCleanInventory = function() {
+  let soldCount = 0;
+  state.inventory = state.inventory.filter(item => {
+    if (item.quality === 'common') {
+      soldCount++;
+      state.player.gold += 40;
+      return false;
+    }
+    return true;
+  });
+  addLog(`🧹 清理了 ${soldCount} 件普通裝備，獲得 ${soldCount * 40} 金幣！`);
+  updateUI();
+  saveData();
 };
 
-// --- 7. Firebase 登入與同步 ---
+// --- 6. P2P 交易所 ---
+window.openSellModal = function() {
+  if (state.inventory.length === 0) {
+    addLog(`❌ 背包中沒有可上架的裝備。`);
+    return;
+  }
+  const item = state.inventory.pop();
+  const price = 200;
+  push(ref(db, "milky_market"), {
+    sellerName: state.player.name,
+    itemName: item.name,
+    atk: item.atk || 10,
+    price: price,
+    timestamp: Date.now()
+  });
+  addLog(`🏪 將【${item.name}】上架至玩家交易所（售價 ${price} 金幣）`);
+  updateUI();
+  saveData();
+  loadMarket();
+};
+
+async function loadMarket() {
+  const listEl = document.getElementById("market-list");
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="sub-text">載入市場資料中...</div>';
+
+  try {
+    const snap = await get(ref(db, "milky_market"));
+    if (snap.exists()) {
+      const data = snap.val();
+      listEl.innerHTML = Object.entries(data).map(([id, item]) => `
+        <div class="list-row">
+          <span>⚔️ <strong>${item.itemName}</strong> (攻擊力 +${item.atk || 10}) | 賣家: ${item.sellerName}</span>
+          <button class="btn btn-success btn-sm" onclick="buyMarketItem('${id}', ${item.price}, '${item.itemName}', ${item.atk || 10})">購買 (${item.price}💰)</button>
+        </div>
+      `).join("");
+    } else {
+      listEl.innerHTML = '<div class="sub-text">目前交易所沒有物品上架</div>';
+    }
+  } catch (err) {
+    listEl.innerHTML = '<div class="sub-text">無法取得市場資料</div>';
+  }
+}
+
+window.buyMarketItem = async function(id, price, name, atk) {
+  if (state.player.gold < price) {
+    addLog(`❌ 金幣不足，無法購買！`);
+    return;
+  }
+  state.player.gold -= price;
+  state.inventory.push({ id: Date.now(), name: name, type: "weapon", atk: atk, quality: "rare" });
+  await remove(ref(db, `milky_market/${id}`));
+  addLog(`🛒 成功購買【${name}】！`);
+  updateUI();
+  saveData();
+  loadMarket();
+};
+
+// --- 7. 排行榜 ---
+async function loadRankings() {
+  const listEl = document.getElementById("rank-list");
+  if (!listEl) return;
+  listEl.innerHTML = '<div class="sub-text">載入全服排行榜中...</div>';
+
+  try {
+    const snap = await get(ref(db, "milky_users"));
+    if (snap.exists()) {
+      const users = Object.values(snap.val()).map(u => u.player || u).filter(Boolean);
+      users.sort((a, b) => (b.totalLevel || 0) - (a.totalLevel || 0));
+
+      listEl.innerHTML = users.slice(0, 10).map((u, i) => `
+        <div class="list-row">
+          <span>#${i + 1} <strong>${u.name || "冒險家"}</strong></span>
+          <span>⭐ 總等級：${u.totalLevel || 4} | 💰 ${u.gold || 0}</span>
+        </div>
+      `).join("");
+    }
+  } catch (err) {
+    listEl.innerHTML = '<div class="sub-text">無法讀取排行榜</div>';
+  }
+}
+
+// --- 8. Firebase 帳號與同步 ---
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     currentUid = user.uid;
+    const inputName = document.getElementById("nickname-input")?.value.trim();
+
     try {
       const snap = await get(ref(db, `milky_users/${currentUid}`));
       if (snap.exists()) {
@@ -153,10 +242,16 @@ onAuthStateChanged(auth, async (user) => {
         if (data.player) Object.assign(state.player, data.player);
         if (data.skills) Object.assign(state.skills, data.skills);
         if (data.inventory) state.inventory = data.inventory;
+      } else {
+        if (inputName) state.player.name = inputName;
+        await saveData();
       }
+
       document.getElementById("login-modal").style.display = "none";
+      document.getElementById("settings-uid").innerText = currentUid;
       updateUI();
       loadRankings();
+      loadMarket();
       requestAnimationFrame(gameLoop);
     } catch (err) {
       console.error(err);
@@ -182,13 +277,20 @@ document.getElementById("auth-form")?.addEventListener("submit", async (e) => {
   }
 });
 
+window.handleLogout = function() {
+  signOut(auth).then(() => { location.reload(); });
+};
+
 async function saveData() {
   if (!currentUid) return;
+  state.player.totalLevel = getTotalLevel();
   await set(ref(db, `milky_users/${currentUid}`), state);
 }
 
-// --- 8. UI 渲染 ---
+// --- 9. 介面更新 ---
 function updateUI() {
+  document.getElementById('username').innerText = state.player.name;
+  document.getElementById('total-level').innerText = getTotalLevel();
   document.getElementById('gold-val').innerText = state.player.gold;
   document.getElementById('stat-points').innerText = state.player.statPoints;
   document.getElementById('stat-str').innerText = state.player.stats.str;
@@ -201,16 +303,15 @@ function updateUI() {
     if (el) el.innerText = state.skills[k].level;
   }
 
-  // 渲染背包
   const grid = document.getElementById('inventory-grid');
   if (grid) {
     grid.innerHTML = '';
     state.inventory.forEach((item) => {
       const div = document.createElement('div');
-      div.className = `item-box ${item.quality}`;
+      div.className = `item-box ${item.quality || 'common'}`;
       div.innerHTML = `
-        <strong>${item.name} ${item.enhance > 0 ? `+${item.enhance}` : ''}</strong><br>
-        <span class="sub-text">⚔️ 攻擊: +${item.atk}</span>
+        <strong>${item.name}</strong><br>
+        <span class="sub-text">⚔️ 攻擊力: +${item.atk || 10}</span>
       `;
       grid.appendChild(div);
     });
@@ -235,4 +336,17 @@ window.switchTab = function(evt, tabId) {
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
   evt.currentTarget.classList.add('active');
   document.getElementById(tabId)?.classList.add('active');
+  if (tabId === 'tab-market') loadMarket();
+  if (tabId === 'tab-rank') loadRankings();
 };
+
+window.donateGuild = function() {
+  if (state.player.gold >= 100) {
+    state.player.gold -= 100;
+    addLog(`🏰 感謝捐贈！公會經驗增加 100 點！`);
+    updateUI();
+    saveData();
+  }
+};
+
+document.getElementById("refresh-rank-btn")?.addEventListener("click", loadRankings);
