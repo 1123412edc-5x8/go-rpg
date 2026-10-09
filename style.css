@@ -1,4 +1,4 @@
-/* --- MWI 經典深藍與極簡風格 --- */
+/* --- Milky Way Idle 經典主題色彩 --- */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -15,10 +15,16 @@ body {
   user-select: none;
 }
 
-/* 登入彈窗 */
+.mwi-app {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* 登入 Modal */
 .modal-overlay {
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(10, 15, 26, 0.95); z-index: 9999;
+  background: rgba(13, 19, 29, 0.95); z-index: 9999;
   display: flex; justify-content: center; align-items: center; padding: 16px;
 }
 .modal-card {
@@ -33,63 +39,91 @@ body {
 }
 .divider-text { font-size: 0.75rem; color: #64748b; margin: 10px 0; }
 
-/* 佈局架構 */
-.mwi-layout {
-  display: flex;
-  height: 100vh;
-  width: 100vw;
-}
-
-/* 最左側 Icon 導覽列 */
-.icon-sidebar {
-  width: 56px;
-  background-color: #121a29;
+/* 1. 左側可收折側邊欄 */
+.mwi-sidebar {
+  width: 200px;
+  background: #121a29;
   border-right: 1px solid #1e2d42;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding-top: 10px;
-  gap: 12px;
-  z-index: 10;
+  transition: width 0.2s ease;
+  z-index: 100;
 }
 
-.nav-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
+.mwi-sidebar.collapsed {
+  width: 56px;
+}
+
+.sidebar-header {
+  height: 48px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 1.2rem;
-  cursor: pointer;
-  background: #1a2638;
-  border: 1px solid transparent;
-  transition: all 0.1s ease;
+  padding: 0 12px;
+  border-bottom: 1px solid #1e2d42;
+  gap: 10px;
 }
 
-/* 按鈕與 Icon 點擊反饋反饋 */
-.nav-icon:active, .btn:active, .skill-btn-card:active {
-  transform: scale(0.92);
-  filter: brightness(1.2);
+.toggle-btn {
+  background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer;
 }
 
-.nav-icon.active {
-  background: #0284c7;
-  border-color: #38bdf8;
-  box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+.active-count {
+  font-size: 0.75rem; color: #64748b; white-space: nowrap; overflow: hidden;
 }
 
-/* 右側主包裝 */
-.main-wrapper {
+.sidebar-menu {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  padding: 8px 0;
 }
 
-/* 頂部玩家與進度條 */
-.top-header {
-  height: 60px;
+.menu-divider {
+  height: 1px; background: #1e2d42; margin: 8px 12px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  gap: 12px;
+  border-left: 3px solid transparent;
+  transition: background 0.15s;
+}
+
+.nav-item:hover { background: #1a2638; }
+.nav-item.active { background: #1e2f47; border-left-color: #38bdf8; }
+
+.nav-icon { font-size: 1.2rem; min-width: 24px; text-align: center; }
+.nav-text { font-size: 0.85rem; font-weight: bold; color: #cbd5e1; white-space: nowrap; }
+
+.skill-info-wrap {
+  flex: 1; display: flex; flex-direction: column; gap: 2px; overflow: hidden;
+}
+
+.mwi-sidebar.collapsed .skill-info-wrap,
+.mwi-sidebar.collapsed .nav-text {
+  display: none;
+}
+
+.skill-name-row {
+  display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: bold;
+}
+.sk-lv { color: #38bdf8; }
+
+.mini-progress {
+  height: 3px; background: #0f172a; border-radius: 2px; overflow: hidden;
+}
+.mini-fill { height: 100%; width: 0%; background: #38bdf8; }
+
+/* 2. 右側主要區域 */
+.mwi-main {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+}
+
+/* 頂部 Header */
+.mwi-header {
+  height: 56px;
   background: #162032;
   border-bottom: 1px solid #1e2d42;
   display: flex;
@@ -98,146 +132,108 @@ body {
   gap: 12px;
 }
 
-.header-user { display: flex; align-items: center; gap: 8px; }
-.user-avatar { font-size: 1.5rem; background: #23324a; padding: 4px; border-radius: 6px; }
-.user-name { font-weight: bold; font-size: 0.85rem; color: #f8fafc; }
-.user-total-lv { font-size: 0.75rem; color: #38bdf8; }
+.user-status-box { display: flex; align-items: center; gap: 8px; }
+.user-avatar { font-size: 1.4rem; background: #23324a; padding: 4px; border-radius: 6px; }
+.uname { font-size: 0.85rem; font-weight: bold; }
+.utotal { font-size: 0.75rem; color: #38bdf8; }
 
-.header-action { flex: 1; display: flex; flex-direction: column; gap: 4px; }
-.action-status-text { display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: bold; }
-.action-progress-bg { height: 8px; background: #0f172a; border-radius: 4px; overflow: hidden; }
-.action-progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #0284c7, #38bdf8); transition: width 0.1s linear; }
+.action-bar-container { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.action-title-row { display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: bold; }
+.progress-track { height: 10px; background: #0f172a; border-radius: 5px; overflow: hidden; }
+.progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #818cf8, #38bdf8); }
 
-/* 主要內容區 */
-.content-body {
-  flex: 1;
-  padding: 12px;
-  overflow-y: auto;
+.btn-stop {
+  background: #ef4444; color: white; border: none; padding: 6px 14px;
+  border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 0.8rem;
 }
 
-.tab-panel { display: none; }
-.tab-panel.active { display: block; }
+/* 主要視窗區 */
+.mwi-body { flex: 1; padding: 16px; overflow-y: auto; }
+.main-panel { display: none; }
+.main-panel.active { display: block; }
 
-.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.page-title { font-size: 1.2rem; margin-bottom: 12px; color: #f8fafc; }
+.panel-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 
-/* MWI 經典物品與技能網格 (適應手機螢幕) */
-.mwi-grid {
+/* 區域子頁籤 */
+.sub-zone-tabs { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; }
+.zone-tab {
+  background: #1e2d42; border: none; color: #94a3b8; padding: 6px 14px;
+  border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: bold; white-space: nowrap;
+}
+.zone-tab.active { background: #0284c7; color: white; }
+
+/* 工作卡片大網格 */
+.cards-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 12px;
 }
 
-.mwi-item-card {
+.mwi-card-item {
+  background: #162032;
+  border: 1px solid #23324a;
+  border-radius: 10px;
+  padding: 16px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mwi-card-item:hover { border-color: #38bdf8; transform: translateY(-2px); }
+.mwi-card-item:active { transform: scale(0.95); }
+
+.card-icon { font-size: 2.5rem; margin-bottom: 8px; }
+.card-name { font-size: 0.85rem; font-weight: bold; }
+
+/* 倉庫網格 */
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(85px, 1fr));
+  gap: 10px;
+}
+
+.inv-box {
   background: #162032;
   border: 1px solid #23324a;
   border-radius: 8px;
-  padding: 8px;
+  padding: 10px;
   text-align: center;
   position: relative;
 }
 
-.item-badge {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  background: #0284c7;
-  color: #fff;
-  font-size: 0.7rem;
-  padding: 1px 5px;
-  border-radius: 10px;
-  font-weight: bold;
+.inv-count {
+  position: absolute; top: 4px; right: 6px;
+  background: #0284c7; color: white; font-size: 0.7rem; padding: 1px 5px;
+  border-radius: 10px; font-weight: bold;
 }
 
-.skill-buttons-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px;
-  margin-top: 10px;
+.inv-icon { font-size: 1.8rem; margin-bottom: 4px; }
+.inv-name { font-size: 0.75rem; color: #cbd5e1; }
+
+/* 清單與通用按鈕 */
+.list-container { display: flex; flex-direction: column; gap: 8px; }
+.list-row {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #162032; border: 1px solid #23324a; padding: 12px; border-radius: 6px; font-size: 0.85rem;
 }
 
-.skill-btn-card {
-  background: #162032;
-  border: 1px solid #23324a;
-  padding: 12px;
-  border-radius: 8px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: bold;
+.btn-primary { background: #0284c7; color: white; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+.btn-sec { background: #334155; color: white; border: none; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+.btn-danger { background: #ef4444; color: white; border: none; padding: 8px 14px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+.gold-disp { color: #facc15; font-weight: bold; font-size: 0.9rem; }
+
+/* 底部 Log */
+.mwi-footer {
+  height: 60px; background: #121a29; border-top: 1px solid #1e2d42; padding: 6px 12px;
 }
+.log-box { height: 100%; overflow-y: auto; font-family: monospace; font-size: 0.75rem; color: #64748b; }
 
-.skill-btn-card.combat { border-color: #ef4444; }
-
-.sk-lv { color: #38bdf8; font-size: 0.8rem; }
-
-/* 清單樣式 (市場/排行榜) */
-.market-list-container, .rank-list-container {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.list-item-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #162032;
-  border: 1px solid #23324a;
-  padding: 10px;
-  border-radius: 6px;
-  font-size: 0.85rem;
-}
-
-.mwi-card {
-  background: #162032;
-  border: 1px solid #23324a;
-  padding: 14px;
-  border-radius: 8px;
-  font-size: 0.85rem;
-}
-
-/* 通用按鈕 */
-.btn {
-  border: none;
-  border-radius: 6px;
-  padding: 8px 12px;
-  font-weight: bold;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.btn-primary { background: #0284c7; color: white; }
-.btn-success { background: #10b981; color: white; }
-.btn-danger { background: #ef4444; color: white; }
-.btn-stop { background: #dc2626; color: white; padding: 6px 12px; font-size: 0.8rem; }
-.btn-google { background: #4285f4; color: white; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; }
-.btn-guest { background: #334155; color: #cbd5e1; width: 100%; margin-top: 8px; }
-.btn-sm { padding: 4px 8px; font-size: 0.75rem; }
-
-/* 底部日誌區 */
-.bottom-log {
-  height: 70px;
-  background: #121a29;
-  border-top: 1px solid #1e2d42;
-  padding: 6px 12px;
-}
-
-.log-box {
-  height: 100%;
-  overflow-y: auto;
-  font-family: monospace;
-  font-size: 0.75rem;
-  color: #94a3b8;
-}
-
-/* 📱 手機端排版最佳化 (RWD) */
+/* 📱 手機端排版與微調 */
 @media (max-width: 600px) {
-  .icon-sidebar { width: 48px; }
-  .nav-icon { width: 36px; height: 36px; font-size: 1rem; }
-  .top-header { padding: 0 8px; gap: 8px; }
-  .user-name { font-size: 0.75rem; }
-  .mwi-grid { grid-template-columns: repeat(3, 1fr); }
+  .mwi-sidebar { width: 56px; }
+  .mwi-sidebar .skill-info-wrap, .mwi-sidebar .nav-text { display: none; }
+  .cards-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .mwi-card-item { padding: 10px 6px; }
+  .card-icon { font-size: 1.8rem; }
 }
