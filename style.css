@@ -1,81 +1,243 @@
-* { box-sizing: border-box; margin: 0; padding: 0; }
+/* --- MWI 經典深藍與極簡風格 --- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Microsoft JhengHei", sans-serif;
-  background-color: #0b0f19;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background-color: #0d131d;
   color: #e2e8f0;
   height: 100vh;
   overflow: hidden;
+  user-select: none;
 }
 
-.mwi-app { display: flex; height: 100vh; }
-
+/* 登入彈窗 */
 .modal-overlay {
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(11, 15, 25, 0.95); z-index: 999;
-  display: flex; justify-content: center; align-items: center;
+  background: rgba(10, 15, 26, 0.95); z-index: 9999;
+  display: flex; justify-content: center; align-items: center; padding: 16px;
 }
 .modal-card {
-  background: #111827; border: 1px solid #1f2937; border-radius: 12px;
-  padding: 24px; width: 340px; text-align: center;
+  background: #162032; border: 1px solid #23324a; border-radius: 12px;
+  padding: 24px; width: 100%; max-width: 360px; text-align: center;
 }
+.mwi-logo { font-size: 1.4rem; font-weight: bold; color: #38bdf8; margin-bottom: 6px; }
+.sub-text { font-size: 0.8rem; color: #94a3b8; margin-bottom: 12px; }
 .input-field {
-  width: 100%; padding: 10px; margin: 6px 0; background: #1f2937;
-  border: 1px solid #374151; border-radius: 6px; color: #fff; text-align: center;
+  width: 100%; padding: 10px; margin: 6px 0; background: #0f172a;
+  border: 1px solid #23324a; border-radius: 6px; color: #fff; font-size: 0.9rem;
 }
-.btn-google { background: #4285f4; color: white; width: 100%; margin: 8px 0; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.divider-text { font-size: 0.75rem; color: #64748b; margin: 10px 0; }
 
-.sidebar {
-  width: 280px; background: #111827; border-right: 1px solid #1f2937;
-  display: flex; flex-direction: column; padding: 16px; overflow-y: auto;
+/* 佈局架構 */
+.mwi-layout {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
 }
-.user-profile { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-.avatar { font-size: 2rem; background: #1f2937; padding: 6px; border-radius: 8px; }
-.level-badge { font-size: 0.8rem; color: #38bdf8; font-weight: bold; margin-top: 2px; }
-.gold-balance { color: #facc15; font-weight: bold; font-size: 0.85rem; }
 
-.card-sm { background: #1f2937; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
-.stat-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.85rem; margin: 4px 0; }
-.skill-category { font-size: 0.75rem; text-transform: uppercase; color: #6b7280; font-weight: bold; margin: 10px 0 4px 0; }
-.skill-list { display: flex; flex-direction: column; gap: 4px; }
-.skill-card {
-  display: flex; justify-content: space-between; background: #1f2937;
-  padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;
+/* 最左側 Icon 導覽列 */
+.icon-sidebar {
+  width: 56px;
+  background-color: #121a29;
+  border-right: 1px solid #1e2d42;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 10px;
+  gap: 12px;
+  z-index: 10;
 }
-.skill-card.active { border-left: 4px solid #38bdf8; background: #1e3a5f; }
-.skill-level { color: #38bdf8; font-weight: bold; }
 
-.main-content { flex: 1; display: flex; flex-direction: column; padding: 16px; overflow-y: auto; }
-.action-status-panel { background: #111827; border: 1px solid #1f2937; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
-.action-info { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 0.85rem; font-weight: bold; }
-.progress-bar-container { height: 8px; background: #1f2937; border-radius: 4px; overflow: hidden; }
-.progress-bar-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #0284c7, #38bdf8); }
+.nav-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  cursor: pointer;
+  background: #1a2638;
+  border: 1px solid transparent;
+  transition: all 0.1s ease;
+}
 
-.content-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
-.tab-btn { background: #1f2937; border: none; color: #9ca3af; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem; }
-.tab-btn.active { background: #0284c7; color: #fff; font-weight: bold; }
-.tab-panel { display: none; flex: 1; }
+/* 按鈕與 Icon 點擊反饋反饋 */
+.nav-icon:active, .btn:active, .skill-btn-card:active {
+  transform: scale(0.92);
+  filter: brightness(1.2);
+}
+
+.nav-icon.active {
+  background: #0284c7;
+  border-color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+}
+
+/* 右側主包裝 */
+.main-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 頂部玩家與進度條 */
+.top-header {
+  height: 60px;
+  background: #162032;
+  border-bottom: 1px solid #1e2d42;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 12px;
+}
+
+.header-user { display: flex; align-items: center; gap: 8px; }
+.user-avatar { font-size: 1.5rem; background: #23324a; padding: 4px; border-radius: 6px; }
+.user-name { font-weight: bold; font-size: 0.85rem; color: #f8fafc; }
+.user-total-lv { font-size: 0.75rem; color: #38bdf8; }
+
+.header-action { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.action-status-text { display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: bold; }
+.action-progress-bg { height: 8px; background: #0f172a; border-radius: 4px; overflow: hidden; }
+.action-progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #0284c7, #38bdf8); transition: width 0.1s linear; }
+
+/* 主要內容區 */
+.content-body {
+  flex: 1;
+  padding: 12px;
+  overflow-y: auto;
+}
+
+.tab-panel { display: none; }
 .tab-panel.active { display: block; }
 
-.canvas-container { background: #111827; border: 1px solid #1f2937; border-radius: 8px; overflow: hidden; }
-#gameCanvas { width: 100%; height: 200px; display: block; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 
-.inventory-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
-.item-box { background: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 10px; position: relative; font-size: 0.8rem; }
-.item-box.rare { border-color: #38bdf8; }
-.item-box.epic { border-color: #a855f7; }
-.item-box.legendary { border-color: #facc15; }
+/* MWI 經典物品與技能網格 (適應手機螢幕) */
+.mwi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 8px;
+}
 
-.market-list, .rank-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-.list-row { display: flex; justify-content: space-between; align-items: center; background: #111827; padding: 10px 14px; border-radius: 6px; border: 1px solid #1f2937; font-size: 0.85rem; }
+.mwi-item-card {
+  background: #162032;
+  border: 1px solid #23324a;
+  border-radius: 8px;
+  padding: 8px;
+  text-align: center;
+  position: relative;
+}
 
-.btn { border: none; border-radius: 6px; cursor: pointer; padding: 6px 12px; font-weight: bold; }
+.item-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: #0284c7;
+  color: #fff;
+  font-size: 0.7rem;
+  padding: 1px 5px;
+  border-radius: 10px;
+  font-weight: bold;
+}
+
+.skill-buttons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.skill-btn-card {
+  background: #162032;
+  border: 1px solid #23324a;
+  padding: 12px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.skill-btn-card.combat { border-color: #ef4444; }
+
+.sk-lv { color: #38bdf8; font-size: 0.8rem; }
+
+/* 清單樣式 (市場/排行榜) */
+.market-list-container, .rank-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.list-item-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #162032;
+  border: 1px solid #23324a;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.mwi-card {
+  background: #162032;
+  border: 1px solid #23324a;
+  padding: 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+/* 通用按鈕 */
+.btn {
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
 .btn-primary { background: #0284c7; color: white; }
 .btn-success { background: #10b981; color: white; }
 .btn-danger { background: #ef4444; color: white; }
-.btn-xs { padding: 2px 6px; font-size: 0.75rem; background: #38bdf8; color: #000; }
-.btn-sm { padding: 4px 8px; font-size: 0.8rem; }
-.highlight { color: #facc15; font-weight: bold; }
-.sub-text { color: #6b7280; font-size: 0.8rem; }
+.btn-stop { background: #dc2626; color: white; padding: 6px 12px; font-size: 0.8rem; }
+.btn-google { background: #4285f4; color: white; width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.btn-guest { background: #334155; color: #cbd5e1; width: 100%; margin-top: 8px; }
+.btn-sm { padding: 4px 8px; font-size: 0.75rem; }
 
-.log-panel { height: 120px; background: #111827; border: 1px solid #1f2937; border-radius: 8px; padding: 8px; margin-top: auto; }
-.logs-container { height: 85px; overflow-y: auto; font-family: monospace; font-size: 0.75rem; color: #9ca3af; }
+/* 底部日誌區 */
+.bottom-log {
+  height: 70px;
+  background: #121a29;
+  border-top: 1px solid #1e2d42;
+  padding: 6px 12px;
+}
+
+.log-box {
+  height: 100%;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+/* 📱 手機端排版最佳化 (RWD) */
+@media (max-width: 600px) {
+  .icon-sidebar { width: 48px; }
+  .nav-icon { width: 36px; height: 36px; font-size: 1rem; }
+  .top-header { padding: 0 8px; gap: 8px; }
+  .user-name { font-size: 0.75rem; }
+  .mwi-grid { grid-template-columns: repeat(3, 1fr); }
+}
