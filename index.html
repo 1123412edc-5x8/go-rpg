@@ -2,188 +2,169 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>星河放置 RPG</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Milky Way Idle - 經典重構版</title>
   <link rel="stylesheet" href="style.css">
   <script type="module" src="game.js"></script>
 </head>
 <body>
 
-  <!-- 登入與創角彈窗 -->
+  <!-- 手動登入 / 註冊 彈窗 (未登入前擋住畫面) -->
   <div id="login-modal" class="modal-overlay">
     <div class="modal-card">
-      <h2>✨ 歡迎來到星河放置 RPG</h2>
-      <p class="sub-text">請設定暱稱並登入以同步雲端存檔</p>
-      
-      <input type="text" id="nickname-input" placeholder="請輸入角色暱稱" class="input-field" value="星河冒險家">
+      <div class="mwi-logo">🐮 Milky Way Idle</div>
+      <p class="sub-text">請選擇登入方式以同步雲端進度</p>
       
       <button id="google-login-btn" class="btn btn-google">
-        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18"> 使用 Google 帳號快速登入
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18"> Google 帳號快速登入
       </button>
 
-      <div class="divider-text">或使用 電子郵件</div>
+      <div class="divider-text">或使用 電子郵件 登入/註冊</div>
 
       <form id="auth-form">
+        <input type="text" id="nickname-input" placeholder="角色暱稱 (例如: Gooseuwu)" class="input-field" required>
         <input type="email" id="email-input" placeholder="電子郵件" class="input-field" required>
         <input type="password" id="password-input" placeholder="密碼" class="input-field" required>
-        <button type="submit" class="btn btn-primary full-btn">登入 / 自動註冊</button>
+        <button type="submit" class="btn btn-primary full-btn">開始冒險 (登入/註冊)</button>
       </form>
+      
+      <button class="btn btn-guest" onclick="startGuestGame()">🎮 匿名遊客直接試玩</button>
     </div>
   </div>
 
-  <!-- 遊戲主要 App -->
-  <div class="mwi-app">
+  <!-- 遊戲主體架構 (模仿 MWI 經典左右三欄) -->
+  <div class="mwi-layout">
 
-    <!-- 左側邊欄 -->
-    <aside class="sidebar">
-      <div class="user-profile">
-        <div class="avatar">🐮</div>
-        <div class="user-details">
-          <div id="username">載入中...</div>
-          <div class="level-badge">⭐ 總等級：<span id="total-level">4</span></div>
-          <div class="gold-balance">💰 金幣：<span id="gold-val">0</span></div>
-        </div>
-      </div>
+    <!-- 1. 最左側：極簡 Icon 圖示選單欄 -->
+    <nav class="icon-sidebar">
+      <div class="nav-icon active" onclick="switchTab('tab-inventory')" title="庫存倉庫">📦</div>
+      <div class="nav-icon" onclick="switchTab('tab-skills')" title="技能生活">🌲</div>
+      <div class="nav-icon" onclick="switchTab('tab-combat')" title="野外戰鬥">⚔️</div>
+      <div class="nav-icon" onclick="switchTab('tab-market')" title="玩家市場">🏪</div>
+      <div class="nav-icon" onclick="switchTab('tab-guild')" title="冒險公會">🏰</div>
+      <div class="nav-icon" onclick="switchTab('tab-rank')" title="全服排行">🏆</div>
+      <div class="nav-icon" onclick="switchTab('tab-settings')" title="系統設定">⚙️</div>
+    </nav>
 
-      <!-- 角色屬性配點 -->
-      <div class="card-sm">
-        <div class="section-title">📊 角色屬性 (可用配點: <span id="stat-points" class="highlight">0</span>)</div>
-        <div class="stat-row">
-          <span>💪 力量: <b id="stat-str">10</b></span>
-          <button class="btn btn-xs" onclick="addStat('str')">+</button>
-        </div>
-        <div class="stat-row">
-          <span>⚡ 敏捷: <b id="stat-agi">10</b></span>
-          <button class="btn btn-xs" onclick="addStat('agi')">+</button>
-        </div>
-        <div class="stat-row">
-          <span>🧠 智力: <b id="stat-int">10</b></span>
-          <button class="btn btn-xs" onclick="addStat('int')">+</button>
-        </div>
-        <div class="stat-row">
-          <span>🍀 幸運: <b id="stat-luk">10</b></span>
-          <button class="btn btn-xs" onclick="addStat('luk')">+</button>
-        </div>
-      </div>
+    <!-- 2. 中央/右側主區域 -->
+    <div class="main-wrapper">
 
-      <div class="skill-category">生活與生產技能</div>
-      <div class="skill-list">
-        <div class="skill-card active" onclick="selectAction('milking')">
-          <span>🥛 擠奶</span>
-          <span class="skill-level">等級 <span id="sk-milking">1</span></span>
+      <!-- 頂部資訊欄 (玩家頭像 + 當前動作進度條) -->
+      <header class="top-header">
+        <div class="header-user">
+          <div class="user-avatar">👤</div>
+          <div class="user-info">
+            <div id="username-display" class="user-name">未登入</div>
+            <div class="user-total-lv">總等級: <span id="total-level-val">6</span></div>
+          </div>
         </div>
-        <div class="skill-card" onclick="selectAction('woodcutting')">
-          <span>🌲 伐木</span>
-          <span class="skill-level">等級 <span id="sk-woodcutting">1</span></span>
-        </div>
-        <div class="skill-card" onclick="selectAction('cheesesmithing')">
-          <span>🧀 起司加工</span>
-          <span class="skill-level">等級 <span id="sk-cheesesmithing">1</span></span>
-        </div>
-        <div class="skill-card" onclick="selectAction('cooking')">
-          <span>🍳 料理烹飪</span>
-          <span class="skill-level">等級 <span id="sk-cooking">1</span></span>
-        </div>
-        <div class="skill-card" onclick="selectAction('alchemy')">
-          <span>🧪 藥水煉金</span>
-          <span class="skill-level">等級 <span id="sk-alchemy">1</span></span>
-        </div>
-      </div>
 
-      <div class="skill-category">戰鬥領域</div>
-      <div class="skill-list">
-        <div class="skill-card" onclick="selectAction('combat')">
-          <span>⚔️ 野外討伐</span>
-          <span class="skill-level">等級 <span id="sk-combat">1</span></span>
+        <!-- 當前工作進度與停止按鈕 -->
+        <div class="header-action">
+          <div class="action-status-text">
+            <span id="current-action-text">🥛 擠奶中...</span>
+            <span id="action-speed-text">2.00s</span>
+          </div>
+          <div class="action-progress-bg">
+            <div id="action-progress-bar" class="action-progress-fill"></div>
+          </div>
         </div>
-      </div>
-    </aside>
 
-    <!-- 右側主要內容區 -->
-    <main class="main-content">
+        <button class="btn btn-stop" onclick="stopCurrentAction()">停止</button>
+      </header>
 
-      <!-- 動態進度條 -->
-      <div class="action-status-panel">
-        <div class="action-info">
-          <span id="current-action-name">🥛 當前工作：牧場擠奶</span>
-          <span id="action-stats-detail">動作速度加成：+0%</span>
-        </div>
-        <div class="progress-bar-container">
-          <div id="action-progress" class="progress-bar-fill"></div>
-        </div>
-      </div>
+      <!-- 主要內容切換頁籤區 -->
+      <main class="content-body">
 
-      <!-- 功能頁籤 -->
-      <div class="content-tabs">
-        <button class="tab-btn active" onclick="switchTab(event, 'tab-action')">⚡ 工作與戰鬥</button>
-        <button class="tab-btn" onclick="switchTab(event, 'tab-inventory')">🎒 背包倉庫</button>
-        <button class="tab-btn" onclick="switchTab(event, 'tab-market')">🏪 玩家交易所</button>
-        <button class="tab-btn" onclick="switchTab(event, 'tab-guild')">🏰 冒險者公會</button>
-        <button class="tab-btn" onclick="switchTab(event, 'tab-rank')">🏆 全服排行榜</button>
-        <button class="tab-btn" onclick="switchTab(event, 'tab-settings')">⚙️ 系統設定</button>
-      </div>
+        <!-- 頁籤 1: 庫存倉庫 (按類別分頁與自動堆疊) -->
+        <section id="tab-inventory" class="tab-panel active">
+          <div class="panel-header">
+            <h3>📦 倉庫物品 (<span id="inv-count">0</span>/50)</h3>
+            <button class="btn btn-danger btn-sm" onclick="autoCleanInventory()">🧹 一鍵清空低階裝備</button>
+          </div>
+          <div id="inventory-grid" class="mwi-grid"></div>
+        </section>
 
-      <!-- 頁籤 1：動作詳情與動畫 -->
-      <div id="tab-action" class="tab-panel active">
-        <div class="canvas-container">
-          <canvas id="gameCanvas"></canvas>
-        </div>
-      </div>
+        <!-- 頁籤 2: 生活與生產技能 -->
+        <section id="tab-skills" class="tab-panel">
+          <h3>🌲 生活技能列表</h3>
+          <div class="skill-buttons-grid">
+            <div class="skill-btn-card" onclick="startAction('milking')">
+              <span>🥛 牧場擠奶</span>
+              <span class="sk-lv">Lv.<span id="sk-milking">1</span></span>
+            </div>
+            <div class="skill-btn-card" onclick="startAction('woodcutting')">
+              <span>🌲 伐木採集</span>
+              <span class="sk-lv">Lv.<span id="sk-woodcutting">1</span></span>
+            </div>
+            <div class="skill-btn-card" onclick="startAction('cheesesmithing')">
+              <span>🧀 起司加工</span>
+              <span class="sk-lv">Lv.<span id="sk-cheesesmithing">1</span></span>
+            </div>
+            <div class="skill-btn-card" onclick="startAction('cooking')">
+              <span>🍳 料理烹飪</span>
+              <span class="sk-lv">Lv.<span id="sk-cooking">1</span></span>
+            </div>
+          </div>
+        </section>
 
-      <!-- 頁籤 2：背包與裝備 -->
-      <div id="tab-inventory" class="tab-panel">
-        <div class="card-header">
-          <h3>🎒 倉庫儲物與裝備</h3>
-          <button class="btn btn-danger btn-sm" onclick="autoCleanInventory()">🧹 一鍵出售普通裝備</button>
-        </div>
-        <div id="inventory-grid" class="inventory-grid"></div>
-      </div>
+        <!-- 頁籤 3: 野外戰鬥 -->
+        <section id="tab-combat" class="tab-panel">
+          <h3>⚔️ 野外討伐區域</h3>
+          <div class="skill-buttons-grid">
+            <div class="skill-btn-card combat" onclick="startAction('combat_goblin')">
+              <span>👺 哥布林營地 (Lv.1)</span>
+              <span class="sk-lv">戰鬥 Lv.<span id="sk-combat">1</span></span>
+            </div>
+          </div>
+        </section>
 
-      <!-- 頁籤 3：P2P 自由交易所 -->
-      <div id="tab-market" class="tab-panel">
-        <div class="card-header">
-          <h3>🏪 全服玩家交易所</h3>
-          <button class="btn btn-success btn-sm" onclick="openSellModal()">+ 上架物品/裝備</button>
-        </div>
-        <div id="market-list" class="market-list"></div>
-      </div>
+        <!-- 頁籤 4: 玩家交易所 (修正讀取失敗) -->
+        <section id="tab-market" class="tab-panel">
+          <div class="panel-header">
+            <h3>🏪 玩家自由交易所</h3>
+            <button class="btn btn-success btn-sm" onclick="openSellModal()">+ 上架物品</button>
+          </div>
+          <div id="market-list" class="market-list-container"></div>
+        </section>
 
-      <!-- 頁籤 4：公會系統 -->
-      <div id="tab-guild" class="tab-panel">
-        <h3>🏰 冒險者公會</h3>
-        <div id="guild-info" class="card-sm" style="margin-top:10px;">
-          <p>當前公會：<strong>星河遠征軍</strong> (等級 3)</p>
-          <p>公會被動加成：經驗值獲得 +10% | 全屬性 +5</p>
-          <button class="btn btn-primary btn-sm" style="margin-top:8px;" onclick="donateGuild()">💰 捐贈 100 金幣提升公會經驗</button>
-        </div>
-      </div>
+        <!-- 頁籤 5: 公會區域 -->
+        <section id="tab-guild" class="tab-panel">
+          <h3>🏰 冒險者公會</h3>
+          <div class="mwi-card">
+            <p>公會名稱：<strong> Milky Way 星雲會</strong></p>
+            <p>公會被動：獲得經驗值 +10%</p>
+            <button class="btn btn-primary btn-sm" style="margin-top:10px;" onclick="donateGuild()">💰 捐贈金幣支援公會</button>
+          </div>
+        </section>
 
-      <!-- 頁籤 5：全服排行榜 -->
-      <div id="tab-rank" class="tab-panel">
-        <div class="card-header">
-          <h3>🏆 全服總等級排行榜</h3>
-          <button class="btn btn-sm" id="refresh-rank-btn">🔄 重整列表</button>
-        </div>
-        <div id="rank-list" class="rank-list"></div>
-      </div>
+        <!-- 頁籤 6: 全服排行榜 (修正讀取失敗) -->
+        <section id="tab-rank" class="tab-panel">
+          <div class="panel-header">
+            <h3>🏆 全服總等級排行榜</h3>
+            <button class="btn btn-sm" onclick="loadLeaderboard()">🔄 重新整理</button>
+          </div>
+          <div id="rank-list" class="rank-list-container"></div>
+        </section>
 
-      <!-- 頁籤 6：系統設定 -->
-      <div id="tab-settings" class="tab-panel">
-        <h3>⚙️ 系統設定</h3>
-        <div class="card-sm" style="margin-top:10px;">
-          <p>帳號 ID：<span id="settings-uid" class="sub-text">未連線</span></p>
-          <p>存檔狀態：<span style="color:#4ade80;">☁️ 自動雲端同步中</span></p>
-          <button class="btn btn-danger btn-sm" style="margin-top:12px;" onclick="handleLogout()">🚪 登出帳號</button>
-        </div>
-      </div>
+        <!-- 頁籤 7: 系統設定 -->
+        <section id="tab-settings" class="tab-panel">
+          <h3>⚙️ 系統設定</h3>
+          <div class="mwi-card">
+            <p>玩家 UID：<span id="settings-uid-text">試玩遊客</span></p>
+            <p>雲端同步狀態：<span id="sync-status" style="color:#4ade80;">🟢 正常運作</span></p>
+            <button class="btn btn-danger btn-sm" style="margin-top:15px;" onclick="handleLogout()">🚪 登出帳號</button>
+          </div>
+        </section>
 
-      <!-- 底部日誌 -->
-      <div class="log-panel">
-        <div class="log-title">📜 冒險日誌</div>
-        <div id="game-logs" class="logs-container"></div>
-      </div>
+      </main>
 
-    </main>
+      <!-- 底部簡易日誌區 -->
+      <footer class="bottom-log">
+        <div id="log-box" class="log-box"></div>
+      </footer>
+
+    </div>
 
   </div>
 
