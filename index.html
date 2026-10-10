@@ -8,7 +8,7 @@
 </head>
 <body>
 
-  <!-- 登入與角色建立 Modal -->
+  <!-- 登入 Modal -->
   <div id="login-modal" class="modal-overlay">
     <div class="modal-card">
       <div class="mwi-logo">🌌 Milky Way Idle</div>
@@ -21,10 +21,9 @@
     </div>
   </div>
 
-  <!-- 遊戲主要佈局容器 -->
   <div class="mwi-app">
 
-    <!-- 1. 左側可收折選單欄 -->
+    <!-- 1. 左側邊欄 -->
     <aside id="sidebar" class="mwi-sidebar">
       <div class="sidebar-header">
         <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
@@ -33,7 +32,7 @@
 
       <div class="sidebar-menu">
         <div class="nav-item" onclick="switchMainTab('tab-inventory')">
-          <span class="nav-icon">📦</span><span class="nav-text">我的物品</span>
+          <span class="nav-icon">📦</span><span class="nav-text">角色與物品</span>
         </div>
         <div class="nav-item" onclick="switchMainTab('tab-market')">
           <span class="nav-icon">🏪</span><span class="nav-text">交易所</span>
@@ -41,7 +40,7 @@
         
         <div class="menu-divider"></div>
 
-        <!-- 12 大獨立產業鏈選單 (含等級與經驗條) -->
+        <!-- 12 大產業鏈 -->
         <div class="nav-item active" onclick="openSkillPage('milking')">
           <span class="nav-icon">🥛</span>
           <div class="skill-info-wrap">
@@ -160,7 +159,6 @@
     <!-- 2. 右側主要顯示區 -->
     <main class="mwi-main">
 
-      <!-- 頂部資訊與當前動作狀態列 -->
       <header class="mwi-header">
         <div class="user-status-box">
           <div class="user-avatar">👤</div>
@@ -183,10 +181,9 @@
         <button class="btn-stop" onclick="stopCurrentAction()">停止</button>
       </header>
 
-      <!-- 主要分頁 View 視窗 -->
       <div class="mwi-body">
 
-        <!-- 頁籤 A: 產業工作與配方面板 -->
+        <!-- 頁籤 A: 產業工作區 -->
         <section id="tab-skill-page" class="main-panel active">
           <div class="skill-header-row">
             <h2 id="page-skill-title" class="page-title">擠奶</h2>
@@ -195,16 +192,47 @@
           <div id="action-cards-grid" class="cards-grid"></div>
         </section>
 
-        <!-- 頁籤 B: 倉庫 (我的物品) -->
+        <!-- 頁籤 B: 角色裝備與倉庫 -->
         <section id="tab-inventory" class="main-panel">
-          <div class="panel-top">
-            <h2 class="page-title">📦 我的物品 (<span id="inv-capacity">0</span>/100)</h2>
+          <!-- 裝備穿戴與屬性區域 -->
+          <div class="equip-section">
+            <h3 class="sub-title">🛡️ 角色裝備與屬性</h3>
+            <div class="equip-container">
+              <div class="equip-slots">
+                <div class="equip-slot" onclick="unequipItem('weapon')">
+                  <span class="slot-label">武器</span>
+                  <div id="slot-weapon" class="slot-item">🚫</div>
+                </div>
+                <div class="equip-slot" onclick="unequipItem('armor')">
+                  <span class="slot-label">防具</span>
+                  <div id="slot-armor" class="slot-item">🚫</div>
+                </div>
+                <div class="equip-slot" onclick="unequipItem('helmet')">
+                  <span class="slot-label">頭盔</span>
+                  <div id="slot-helmet" class="slot-item">🚫</div>
+                </div>
+                <div class="equip-slot" onclick="unequipItem('ring')">
+                  <span class="slot-label">飾品</span>
+                  <div id="slot-ring" class="slot-item">🚫</div>
+                </div>
+              </div>
+              <div class="stats-panel">
+                <div>力量 (STR): <strong id="stat-str">10</strong></div>
+                <div>敏捷 (AGI): <strong id="stat-agi">10</strong></div>
+                <div>智力 (INT): <strong id="stat-int">10</strong></div>
+                <div>體質 (VIT): <strong id="stat-vit">10</strong></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel-top" style="margin-top: 16px;">
+            <h2 class="page-title">📦 我的背包</h2>
             <div class="gold-disp">💰 金幣: <span id="gold-val">0</span></div>
           </div>
           <div id="inventory-grid" class="inventory-grid"></div>
         </section>
 
-        <!-- 頁籤 C: 玩家交易所 (純 P2P 交易) -->
+        <!-- 頁籤 C: 交易所 -->
         <section id="tab-market" class="main-panel">
           <div class="panel-top">
             <h2 class="page-title">🏪 自由交易所</h2>
@@ -213,10 +241,10 @@
           <div id="market-list" class="list-container"></div>
         </section>
 
-        <!-- 頁籤 D: 真實排行榜 -->
+        <!-- 頁籤 D: 排行榜 -->
         <section id="tab-rank" class="main-panel">
           <div class="panel-top">
-            <h2 class="page-title">🏆 全服排行 (真實數據)</h2>
+            <h2 class="page-title">🏆 全服排行</h2>
             <button class="btn-sec" onclick="loadLeaderboard()">刷新排名</button>
           </div>
           <div id="rank-list" class="list-container"></div>
@@ -224,17 +252,16 @@
 
         <!-- 頁籤 E: 系統設定 -->
         <section id="tab-settings" class="main-panel">
-          <h2 class="page-title">⚙️ 帳號與系統設定</h2>
+          <h2 class="page-title">⚙️ 系統設定</h2>
           <div class="settings-card">
             <p>當前角色：<strong id="settings-name-text">Gooseuwu</strong></p>
-            <p>資料備份：<span style="color:#4ade80;">🟢 Firebase / 本地雙重同步</span></p>
+            <p>資料備份：<span style="color:#4ade80;">🟢 自動同步</span></p>
             <p>超越加成：<span id="transcend-bonus-text">動作速度 +0%</span></p>
           </div>
         </section>
 
       </div>
 
-      <!-- 底部即時動作日誌 -->
       <footer class="mwi-footer">
         <div id="log-box" class="log-box"></div>
       </footer>
